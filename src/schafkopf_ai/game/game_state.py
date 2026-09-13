@@ -5,10 +5,13 @@ from .game_contract import GameContract
 from .game_type import GameType
 from .legal_moves import (
     LegalMoveContext,
+)
+from .legal_moves import (
     legal_moves as determine_legal_moves,
 )
+from .observation import PlayerObservation
 from .player import Player
-from .trick import Trick
+from .trick import Trick, TrickPlay
 from .trump import is_trump
 
 
@@ -136,6 +139,40 @@ class GameState:
             )
 
         return self.players[index]
+
+    def observation_for(
+        self,
+        player_index: int,
+    ) -> PlayerObservation:
+        """
+        Create an observation from one player's perspective.
+
+        Only information legitimately visible to that player is included.
+        Other players' remaining hands are never exposed.
+        """
+        player = self.player(player_index)
+
+        current_trick: tuple[TrickPlay, ...]
+
+        if self.current_trick is None:
+            current_trick = ()
+        else:
+            current_trick = tuple(self.current_trick.plays)
+
+        completed_tricks: tuple[
+            tuple[TrickPlay, ...],
+            ...,
+        ] = tuple(tuple(trick.plays) for trick in self._completed_tricks)
+
+        return PlayerObservation(
+            player_index=player_index,
+            hand=player.cards,
+            contract=self.contract,
+            current_player=self.current_player,
+            current_trick=current_trick,
+            completed_tricks=completed_tricks,
+            called_ace_released=self.called_ace_released,
+        )
 
     def legal_moves(
         self,
