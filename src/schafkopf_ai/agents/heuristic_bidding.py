@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 from schafkopf_ai.game.card import Card, Rank, Suit
 from schafkopf_ai.game.game_contract import GameContract
@@ -138,7 +138,13 @@ def _evaluate_solo(
 
     trump_length = _clamp((trump_count - 3) / 4)
     top_control = _weighted_top_control(held, ordering, limit=6)
-    side_control = _clamp((side_aces + 0.35 * side_tens) / 2.0)
+    # Long, controlled trump holdings can replace side-suit winners.
+    # Scale this compensation from six trumps to full coverage at seven.
+    trump_coverage = _clamp((trump_count - 5) / 2.0) * top_control
+    side_control = max(
+        _clamp((side_aces + 0.35 * side_tens) / 2.0),
+        trump_coverage,
+    )
     loser_control = _clamp(1.0 - losers / 4.0)
 
     confidence = _clamp(

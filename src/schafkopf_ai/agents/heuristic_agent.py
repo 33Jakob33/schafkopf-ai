@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from schafkopf_ai.game.bidding import (
     BiddingAction,
@@ -50,7 +50,7 @@ class HeuristicConfig:
     teammate_confidence: float = 0.70
     low_overtake_risk: float = 0.20
     long_suit_minimum: int = 2
-    bidding: BiddingHeuristicConfig = BiddingHeuristicConfig()
+    bidding: BiddingHeuristicConfig = field(default_factory=BiddingHeuristicConfig)
 
 
 class HeuristicAgent(Agent):
