@@ -1,4 +1,8 @@
-from schafkopf_ai.agents.heuristic_agent import HeuristicAgent, infer_voids
+from schafkopf_ai.agents.heuristic_agent import HeuristicAgent
+from schafkopf_ai.agents.heuristic_knowledge import (
+    PublicCardKnowledge,
+    infer_voids,
+)
 from schafkopf_ai.game.bidding import BiddingState
 from schafkopf_ai.game.card import Card, Rank, Suit
 from schafkopf_ai.game.deck import Deck
@@ -107,3 +111,179 @@ def test_infer_voids_detects_trump_void() -> None:
     assert 1 in voids.trump_void_players
     assert 3 in voids.trump_void_players
     assert 2 not in voids.trump_void_players
+
+
+def test_public_knowledge_counts_remaining_wenz_trumps() -> None:
+    contract = GameContract(GameType.WENZ, declarer=0)
+    observation = PlayerObservation(
+        player_index=0,
+        hand=(
+            Card(Suit.EICHEL, Rank.UNTER),
+            Card(Suit.GRAS, Rank.UNTER),
+        ),
+        contract=contract,
+        current_player=0,
+        current_trick=(),
+        completed_tricks=(
+            (
+                TrickPlay(0, Card(Suit.EICHEL, Rank.ACE)),
+                TrickPlay(1, Card(Suit.HERZ, Rank.UNTER)),
+                TrickPlay(2, Card(Suit.EICHEL, Rank.TEN)),
+                TrickPlay(3, Card(Suit.EICHEL, Rank.KING)),
+            ),
+        ),
+        points_by_player=(0, 0, 0, 0),
+        called_ace_released=False,
+    )
+
+    knowledge = PublicCardKnowledge.from_observation(observation)
+
+    assert knowledge.remaining_trump_count == 1
+    assert knowledge.unseen_trumps == (Card(Suit.SCHELLEN, Rank.UNTER),)
+
+
+def test_public_knowledge_probability_excludes_known_void_player() -> None:
+    called_ace = Card(Suit.GRAS, Rank.ACE)
+    observation = PlayerObservation(
+        player_index=0,
+        hand=(Card(Suit.SCHELLEN, Rank.SEVEN),),
+        contract=GameContract(
+            game_type=GameType.SAUSPIEL,
+            called_suit=Suit.GRAS,
+            declarer=0,
+        ),
+        current_player=0,
+        current_trick=(),
+        completed_tricks=(
+            (
+                TrickPlay(0, Card(Suit.GRAS, Rank.SEVEN)),
+                TrickPlay(1, Card(Suit.EICHEL, Rank.SEVEN)),
+                TrickPlay(2, Card(Suit.GRAS, Rank.TEN)),
+                TrickPlay(3, Card(Suit.GRAS, Rank.KING)),
+            ),
+        ),
+        points_by_player=(0, 0, 0, 0),
+        called_ace_released=False,
+    )
+
+    probabilities = PublicCardKnowledge.from_observation(
+        observation
+    ).holder_probabilities(called_ace)
+
+    assert probabilities[0] == 0.0
+    assert probabilities[1] == 0.0
+    assert probabilities[2] > 0.0
+    assert probabilities[3] > 0.0
+    assert abs(sum(probabilities) - 1.0) < 1e-9
+
+
+def test_sauspiel_declarer_searches_for_called_ace() -> None:
+    agent = HeuristicAgent()
+    contract = GameContract(
+        game_type=GameType.SAUSPIEL,
+        called_suit=Suit.GRAS,
+        declarer=0,
+    )
+    search_card = Card(Suit.GRAS, Rank.SEVEN)
+    observation = PlayerObservation(
+        player_index=0,
+        hand=(
+            search_card,
+            Card(Suit.EICHEL, Rank.OBER),
+            Card(Suit.HERZ, Rank.ACE),
+            Card(Suit.SCHELLEN, Rank.ACE),
+        ),
+        contract=contract,
+        current_player=0,
+        current_trick=(),
+        completed_tricks=(),
+        points_by_player=(0, 0, 0, 0),
+        called_ace_released=False,
+    )
+
+    legal_cards = observation.hand
+
+    assert agent.choose_card(observation, legal_cards) == search_card
+
+
+def test_wenz_declarer_draws_trumps_with_top_control() -> None:
+    agent = HeuristicAgent()
+    contract = GameContract(GameType.WENZ, declarer=0)
+    top_trump = Card(Suit.EICHEL, Rank.UNTER)
+    observation = PlayerObservation(
+        player_index=0,
+        hand=(
+            top_trump,
+            Card(Suit.GRAS, Rank.UNTER),
+            Card(Suit.EICHEL, Rank.ACE),
+            Card(Suit.GRAS, Rank.ACE),
+        ),
+        contract=contract,
+        current_player=0,
+        current_trick=(),
+        completed_tricks=(),
+        points_by_player=(0, 0, 0, 0),
+        called_ace_released=False,
+    )
+
+    chosen = agent.choose_card(observation, observation.hand)
+
+    assert chosen in {
+        Card(Suit.EICHEL, Rank.UNTER),
+        Card(Suit.GRAS, Rank.UNTER),
+    }
+
+
+def test_follow_uses_cheapest_sufficient_trump_on_valuable_trick() -> None:
+    agent = HeuristicAgent()
+    contract = GameContract(GameType.WENZ, declarer=0)
+    low_trump = Card(Suit.SCHELLEN, Rank.UNTER)
+    high_trump = Card(Suit.EICHEL, Rank.UNTER)
+    observation = PlayerObservation(
+        player_index=0,
+        hand=(
+            low_trump,
+            high_trump,
+            Card(Suit.SCHELLEN, Rank.SEVEN),
+        ),
+        contract=contract,
+        current_player=0,
+        current_trick=(
+            TrickPlay(2, Card(Suit.GRAS, Rank.ACE)),
+            TrickPlay(3, Card(Suit.GRAS, Rank.TEN)),
+        ),
+        completed_tricks=(),
+        points_by_player=(0, 0, 0, 0),
+        called_ace_released=False,
+    )
+
+    chosen = agent.choose_card(
+        observation,
+        (low_trump, high_trump, Card(Suit.SCHELLEN, Rank.SEVEN)),
+    )
+
+    assert chosen == low_trump
+
+
+def test_ramsch_dumps_points_when_other_player_is_winning() -> None:
+    agent = HeuristicAgent()
+    contract = GameContract(GameType.RAMSCH)
+    ten = Card(Suit.SCHELLEN, Rank.TEN)
+    seven = Card(Suit.SCHELLEN, Rank.SEVEN)
+    observation = PlayerObservation(
+        player_index=0,
+        hand=(ten, seven),
+        contract=contract,
+        current_player=0,
+        current_trick=(
+            TrickPlay(2, Card(Suit.EICHEL, Rank.ACE)),
+            TrickPlay(3, Card(Suit.EICHEL, Rank.KING)),
+        ),
+        completed_tricks=(),
+        points_by_player=(0, 0, 25, 0),
+        called_ace_released=False,
+    )
+
+    chosen = agent.choose_card(observation, (ten, seven))
+
+    assert chosen == ten
