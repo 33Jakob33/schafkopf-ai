@@ -135,9 +135,7 @@ class HeuristicAgent(Agent):
         )
 
         desired_type = (
-            BiddingActionType.PLAY
-            if choice is not None
-            else BiddingActionType.PASS
+            BiddingActionType.PLAY if choice is not None else BiddingActionType.PASS
         )
         return self._action_of_type(legal_actions, desired_type)
 
@@ -222,9 +220,7 @@ class HeuristicAgent(Agent):
             chosen_contract = choice.contract
 
         return next(
-            action
-            for action in announcements
-            if action.contract == chosen_contract
+            action for action in announcements if action.contract == chosen_contract
         )
 
     def _desired_bid_value(self, observation: BiddingObservation) -> int | None:

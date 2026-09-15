@@ -160,9 +160,7 @@ def _evaluate_solo(
         enough_top_control = trump_count >= 7 and top_four_count >= 2
 
     enough_side_control = (
-        side_aces >= 1
-        or trump_count >= 7
-        or (trump_count >= 6 and losers <= 2.0)
+        side_aces >= 1 or trump_count >= 7 or (trump_count >= 6 and losers <= 2.0)
     )
     manageable_losers = losers <= 3.0
 
@@ -203,9 +201,7 @@ def _evaluate_wenz_like(
         Suit.HERZ: 0.55,
         Suit.SCHELLEN: 0.35,
     }
-    trump_quality = _clamp(
-        sum(quality_weights[card.suit] for card in trumps) / 1.60
-    )
+    trump_quality = _clamp(sum(quality_weights[card.suit] for card in trumps) / 1.60)
     trump_length = len(trumps) / 4.0
 
     side_aces = sum(card.rank is Rank.ACE for card in non_trumps)
@@ -217,10 +213,7 @@ def _evaluate_wenz_like(
     shape = _clamp(short_suits / 3.0)
 
     confidence = _clamp(
-        0.42 * trump_quality
-        + 0.20 * trump_length
-        + 0.25 * side_control
-        + 0.13 * shape
+        0.42 * trump_quality + 0.20 * trump_length + 0.25 * side_control + 0.13 * shape
     )
 
     trump_count = len(trumps)
@@ -273,14 +266,11 @@ def _evaluate_sauspiel(
     top_control = _weighted_top_control(held, ordering, limit=8)
 
     side_aces = sum(
-        card.rank is Rank.ACE and card.suit is not called_suit
-        for card in non_trumps
+        card.rank is Rank.ACE and card.suit is not called_suit for card in non_trumps
     )
     side_control = _clamp(side_aces / 2.0)
 
-    called_cards = tuple(
-        card for card in non_trumps if card.suit is called_suit
-    )
+    called_cards = tuple(card for card in non_trumps if card.suit is called_suit)
     called_count = len(called_cards)
     count_quality = {
         1: 1.00,
@@ -307,9 +297,7 @@ def _evaluate_sauspiel(
 
     lengths = _plain_suit_lengths(non_trumps)
     useful_short_suits = sum(
-        length <= 1
-        for suit, length in lengths.items()
-        if suit is not called_suit
+        length <= 1 for suit, length in lengths.items() if suit is not called_suit
     )
     shape = _clamp(useful_short_suits / 2.0)
 
@@ -371,8 +359,7 @@ def _weighted_top_control(
 
 def _estimated_plain_losers(cards: tuple[Card, ...]) -> float:
     by_suit: dict[Suit, tuple[Card, ...]] = {
-        suit: tuple(card for card in cards if card.suit is suit)
-        for suit in Suit
+        suit: tuple(card for card in cards if card.suit is suit) for suit in Suit
     }
 
     losers = 0.0
@@ -399,10 +386,7 @@ def _estimated_plain_losers(cards: tuple[Card, ...]) -> float:
 
 
 def _plain_suit_lengths(cards: tuple[Card, ...]) -> dict[Suit, int]:
-    return {
-        suit: sum(card.suit is suit for card in cards)
-        for suit in Suit
-    }
+    return {suit: sum(card.suit is suit for card in cards) for suit in Suit}
 
 
 def _clamp(value: float) -> float:

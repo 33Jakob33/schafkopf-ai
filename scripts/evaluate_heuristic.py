@@ -197,9 +197,7 @@ def run_evaluation(*, games: int, seed: int, progress_every: int) -> None:
     print(f"Heuristic net payment:     {sum(heuristic_payments):>+10,}")
     print(f"Mean payment / game:       {mean_payment:>+10.3f}")
     print(f"Median payment / game:     {median_payment:>+10.3f}")
-    print(
-        f"95% CI mean payment:       [{ci_low:+.3f}, {ci_high:+.3f}]"
-    )
+    print(f"95% CI mean payment:       [{ci_low:+.3f}, {ci_high:+.3f}]")
     print(f"Schneider wins:            {heuristic_schneider_wins:>10,}")
     print(f"Schwarz wins:              {heuristic_schwarz_wins:>10,}")
 
@@ -234,9 +232,7 @@ def run_evaluation(*, games: int, seed: int, progress_every: int) -> None:
     print("-" * 72)
     for game_type in GameType:
         count = contract_counts[game_type]
-        print(
-            f"{game_type.value:<12} {count:>7,}  ({count / games:>7.2%})"
-        )
+        print(f"{game_type.value:<12} {count:>7,}  ({count / games:>7.2%})")
 
     print("\nContracts declared by HeuristicAgent")
     print("-" * 72)
