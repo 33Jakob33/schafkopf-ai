@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import Counter
 from dataclasses import dataclass
 
 from schafkopf_ai.game.bidding import (
@@ -16,9 +15,15 @@ from schafkopf_ai.game.game_type import GameType
 from schafkopf_ai.game.observation import PlayerObservation
 from schafkopf_ai.game.scoring import card_points
 from schafkopf_ai.game.trick import card_beats, plain_card_strength, winning_play
-from schafkopf_ai.game.trump import is_trump, trump_order, trump_strength
+from schafkopf_ai.game.trump import is_trump, trump_strength
 
 from .agent import Agent
+from .heuristic_bidding import (
+    BiddingHeuristicConfig,
+    evaluate_contract,
+    evaluate_contracts,
+    preferred_contract,
+)
 from .heuristic_knowledge import (
     InferredVoids,
     PublicCardKnowledge,
@@ -33,13 +38,6 @@ __all__ = [
     "infer_voids",
 ]
 
-BID_SCORE_THRESHOLDS: dict[GameType, float] = {
-    GameType.SAUSPIEL: 18.0,
-    GameType.WENZ: 14.0,
-    GameType.GEIER: 14.0,
-    GameType.SOLO: 25.0,
-}
-
 
 @dataclass(frozen=True, slots=True)
 class HeuristicConfig:
@@ -52,6 +50,7 @@ class HeuristicConfig:
     teammate_confidence: float = 0.70
     low_overtake_risk: float = 0.20
     long_suit_minimum: int = 2
+    bidding: BiddingHeuristicConfig = BiddingHeuristicConfig()
 
 
 class HeuristicAgent(Agent):
@@ -65,10 +64,9 @@ class HeuristicAgent(Agent):
     tactics for declarer/defender roles, reacts to score pressure, and has a
     dedicated Ramsch policy.
 
-    It is intentionally interpretable rather than optimal. Multi-trick
-    planning is heuristic: trump control, suit establishment, void creation,
-    master-card preservation, and score-aware sacrifice are planned across
-    future tricks without enumerating complete hidden hands.
+    Bidding uses contract-specific normalized confidence estimates rather than
+    one generic score. Solo additionally has hard strength requirements and a
+    confidence margin over safer contracts.
     """
 
     def __init__(self, config: HeuristicConfig | None = None) -> None:
@@ -130,15 +128,16 @@ class HeuristicAgent(Agent):
             rules=observation.rules,
             declarer=observation.player_index,
         )
-
-        wants_to_play = any(
-            self._contract_score(observation.hand, contract)
-            >= BID_SCORE_THRESHOLDS[contract.game_type]
-            for contract in contracts
+        choice = preferred_contract(
+            observation.hand,
+            contracts,
+            config=self.config.bidding,
         )
 
         desired_type = (
-            BiddingActionType.PLAY if wants_to_play else BiddingActionType.PASS
+            BiddingActionType.PLAY
+            if choice is not None
+            else BiddingActionType.PASS
         )
         return self._action_of_type(legal_actions, desired_type)
 
@@ -198,12 +197,34 @@ class HeuristicAgent(Agent):
         if not announcements:
             raise ValueError("No legal contract announcement available.")
 
-        return max(
-            announcements,
-            key=lambda action: self._contract_score(
+        contracts = tuple(self._require_contract(action) for action in announcements)
+        choice = preferred_contract(
+            observation.hand,
+            contracts,
+            config=self.config.bidding,
+        )
+
+        if choice is None:
+            # This should only occur if a custom bidding sequence forces the
+            # agent to announce above the strength it originally supported.
+            # Choose the least-bad legal contract rather than producing an
+            # invalid bidding action.
+            evaluations = evaluate_contracts(
                 observation.hand,
-                self._require_contract(action),
-            ),
+                contracts,
+                config=self.config.bidding,
+            )
+            chosen_contract = max(
+                evaluations,
+                key=lambda evaluation: evaluation.confidence,
+            ).contract
+        else:
+            chosen_contract = choice.contract
+
+        return next(
+            action
+            for action in announcements
+            if action.contract == chosen_contract
         )
 
     def _desired_bid_value(self, observation: BiddingObservation) -> int | None:
@@ -212,83 +233,27 @@ class HeuristicAgent(Agent):
             rules=observation.rules,
             declarer=observation.player_index,
         )
-        qualified = [
-            contract
-            for contract in contracts
-            if (
-                self._contract_score(observation.hand, contract)
-                >= BID_SCORE_THRESHOLDS[contract.game_type]
-            )
-        ]
-        if not qualified:
+        choice = preferred_contract(
+            observation.hand,
+            contracts,
+            config=self.config.bidding,
+        )
+        if choice is None:
             return None
 
-        return max(
-            observation.bid_values.value(contract.game_type) for contract in qualified
-        )
+        return observation.bid_values.value(choice.contract.game_type)
 
     def _contract_score(
         self,
         hand: tuple[Card, ...],
         contract: GameContract,
     ) -> float:
-        """Estimate hand strength for one exact contract."""
-        trumps = tuple(card for card in hand if is_trump(card, contract))
-        trump_ordering = trump_order(contract)
-        score = 0.0
-
-        for card in trumps:
-            normalized = trump_strength(card, contract) / len(trump_ordering)
-            score += 3.0 + 3.0 * normalized
-
-        held = set(hand)
-        consecutive_top_trumps = 0
-        for trump in trump_ordering:
-            if trump not in held:
-                break
-            consecutive_top_trumps += 1
-        score += consecutive_top_trumps * 2.5
-
-        suit_lengths: Counter[Suit] = Counter()
-        for card in hand:
-            if is_trump(card, contract):
-                continue
-            suit_lengths[card.suit] += 1
-            if card.rank is Rank.ACE:
-                score += 3.0
-            elif card.rank is Rank.TEN:
-                score += 1.5
-            elif card.rank is Rank.KING:
-                score += 0.4
-
-        short_plain_suits = sum(1 for length in suit_lengths.values() if length == 1)
-
-        if contract.game_type in {GameType.WENZ, GameType.GEIER}:
-            score += len(trumps) * 1.75
-            score += short_plain_suits * 0.5
-
-        if contract.game_type is GameType.SOLO:
-            if len(trumps) >= 5:
-                score += 4.0
-            if len(trumps) >= 6:
-                score += 3.0
-
-        if contract.game_type is GameType.SAUSPIEL:
-            if len(trumps) >= 4:
-                score += 2.0
-            called_suit = contract.called_suit
-            if called_suit is not None:
-                called_plain = sum(
-                    1
-                    for card in hand
-                    if (card.suit is called_suit and not is_trump(card, contract))
-                )
-                # One or two called-suit cards make it easier to search for the
-                # partner without being overloaded in that suit.
-                if 1 <= called_plain <= 2:
-                    score += 1.5
-
-        return score
+        """Return the normalized 0..1 confidence for compatibility/debugging."""
+        return evaluate_contract(
+            hand,
+            contract,
+            config=self.config.bidding,
+        ).confidence
 
     # ------------------------------------------------------------------
     # Normal-game leading strategy
