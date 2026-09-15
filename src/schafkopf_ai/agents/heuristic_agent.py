@@ -33,7 +33,6 @@ __all__ = [
     "infer_voids",
 ]
 
-
 BID_SCORE_THRESHOLDS: dict[GameType, float] = {
     GameType.SAUSPIEL: 18.0,
     GameType.WENZ: 14.0,
@@ -72,8 +71,8 @@ class HeuristicAgent(Agent):
     future tricks without enumerating complete hidden hands.
     """
 
-    def __init__(self, config: HeuristicConfig = HeuristicConfig()) -> None:
-        self.config = config
+    def __init__(self, config: HeuristicConfig | None = None) -> None:
+        self.config = HeuristicConfig() if config is None else config
 
     def choose_bidding_action(
         self,
@@ -225,8 +224,7 @@ class HeuristicAgent(Agent):
             return None
 
         return max(
-            observation.bid_values.value(contract.game_type)
-            for contract in qualified
+            observation.bid_values.value(contract.game_type) for contract in qualified
         )
 
     def _contract_score(
@@ -283,10 +281,7 @@ class HeuristicAgent(Agent):
                 called_plain = sum(
                     1
                     for card in hand
-                    if (
-                        card.suit is called_suit
-                        and not is_trump(card, contract)
-                    )
+                    if (card.suit is called_suit and not is_trump(card, contract))
                 )
                 # One or two called-suit cards make it easier to search for the
                 # partner without being overloaded in that suit.
@@ -447,7 +442,10 @@ class HeuristicAgent(Agent):
     ) -> Card | None:
         contract = observation.contract
         declarer = contract.declarer
-        if declarer is None or observation.trick_number > self.config.draw_trumps_until_trick:
+        if (
+            declarer is None
+            or observation.trick_number > self.config.draw_trumps_until_trick
+        ):
             return None
 
         own_trumps = tuple(card for card in legal_cards if is_trump(card, contract))
@@ -619,11 +617,7 @@ class HeuristicAgent(Agent):
                 )
             )
 
-            if (
-                not should_take
-                and losing_cards
-                and is_trump(best_winner, contract)
-            ):
+            if not should_take and losing_cards and is_trump(best_winner, contract):
                 return self._best_discard(observation, losing_cards, knowledge)
 
             if should_take:
@@ -679,7 +673,9 @@ class HeuristicAgent(Agent):
                 return base
 
             suit_length = self._own_plain_suit_length(observation, card.suit)
-            create_void_bonus = 4.0 if suit_length == 1 and knowledge.own_trumps else 0.0
+            create_void_bonus = (
+                4.0 if suit_length == 1 and knowledge.own_trumps else 0.0
+            )
 
             called_suit_penalty = 0.0
             if (
@@ -924,7 +920,10 @@ class HeuristicAgent(Agent):
         opponent_schneider_border = 29 if own_is_declarer_side else 30
         if observation.trick_number >= 6 and own_points <= own_schneider_border:
             urgency += 0.75
-        if observation.trick_number >= 6 and opponent_points <= opponent_schneider_border:
+        if (
+            observation.trick_number >= 6
+            and opponent_points <= opponent_schneider_border
+        ):
             urgency += 0.5
 
         return min(3.0, urgency)
@@ -965,8 +964,7 @@ class HeuristicAgent(Agent):
 
         count = 3 - len(observation.current_trick)
         return tuple(
-            (observation.player_index + offset) % 4
-            for offset in range(1, count + 1)
+            (observation.player_index + offset) % 4 for offset in range(1, count + 1)
         )
 
     def _lead_plan_score(
@@ -1038,10 +1036,7 @@ class HeuristicAgent(Agent):
         return sum(
             1
             for card in observation.hand
-            if (
-                card.suit is suit
-                and not is_trump(card, observation.contract)
-            )
+            if (card.suit is suit and not is_trump(card, observation.contract))
         )
 
     @staticmethod

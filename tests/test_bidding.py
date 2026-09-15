@@ -1,5 +1,3 @@
-import pytest
-
 from schafkopf_ai.game.bidding import (
     BiddingAction,
     BiddingActionType,

@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from .scoring import points_by_player
+
 from .card import Card, Rank
 from .game_contract import GameContract
 from .game_type import GameType
@@ -11,6 +11,7 @@ from .legal_moves import (
 )
 from .observation import PlayerObservation
 from .player import Player
+from .scoring import points_by_player
 from .trick import Trick, TrickPlay
 from .trump import is_trump
 

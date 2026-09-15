@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypeAlias
 
 from schafkopf_ai.game.card import Card, Rank, Suit
 from schafkopf_ai.game.game_type import GameType
 from schafkopf_ai.game.observation import PlayerObservation
 from schafkopf_ai.game.trick import TrickPlay
-
 
 SUIT_ORDER: tuple[Suit, ...] = (
     Suit.EICHEL,
@@ -68,8 +66,8 @@ OBSERVATION_FEATURE_SIZE = (
     + TRICK_NUMBER_FEATURE_SIZE
 )
 
-FeatureVector: TypeAlias = tuple[float, ...]
-ActionMask: TypeAlias = tuple[int, ...]
+type FeatureVector = tuple[float, ...]
+type ActionMask = tuple[int, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,9 +99,7 @@ def card_to_action_index(card: Card) -> int:
 def action_index_to_card(action_index: int) -> Card:
     """Return the card represented by a stable action index."""
     if not 0 <= action_index < ACTION_COUNT:
-        raise ValueError(
-            f"Card action index must be between 0 and {ACTION_COUNT - 1}."
-        )
+        raise ValueError(f"Card action index must be between 0 and {ACTION_COUNT - 1}.")
 
     suit_index, rank_index = divmod(action_index, len(RANK_ORDER))
 
@@ -258,11 +254,7 @@ def _encode_optional_player(
     observer: int,
 ) -> list[float]:
     # Position 0 represents None; relative players occupy positions 1..4.
-    index = (
-        0
-        if player is None
-        else relative_player_index(player, observer) + 1
-    )
+    index = 0 if player is None else relative_player_index(player, observer) + 1
     return _one_hot(index, OPTIONAL_PLAYER_FEATURE_SIZE)
 
 

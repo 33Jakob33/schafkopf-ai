@@ -7,7 +7,6 @@ from .game_contract import GameContract
 from .game_type import GameType
 from .rules import AllPassAction, GameRules
 
-
 PLAYER_COUNT = 4
 CARDS_PER_PLAYER = 8
 

@@ -2,7 +2,6 @@ from collections.abc import Mapping
 
 from schafkopf_ai.game.card import Card, Rank, Suit
 from schafkopf_ai.game.deck import Deck
-
 from schafkopf_ai.game.game_contract import GameContract
 from schafkopf_ai.game.game_result import determine_game_result
 from schafkopf_ai.game.game_type import GameType

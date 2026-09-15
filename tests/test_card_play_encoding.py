@@ -122,12 +122,8 @@ def test_hand_is_encoded_in_first_32_features() -> None:
     hand_features = features[:CARD_COUNT]
 
     assert sum(hand_features) == 2.0
-    assert hand_features[
-        card_to_action_index(Card(Suit.EICHEL, Rank.ACE))
-    ] == 1.0
-    assert hand_features[
-        card_to_action_index(Card(Suit.HERZ, Rank.SEVEN))
-    ] == 1.0
+    assert hand_features[card_to_action_index(Card(Suit.EICHEL, Rank.ACE))] == 1.0
+    assert hand_features[card_to_action_index(Card(Suit.HERZ, Rank.SEVEN))] == 1.0
 
 
 def test_combined_card_play_encoding_contains_legal_mask() -> None:
@@ -140,9 +136,7 @@ def test_combined_card_play_encoding_contains_legal_mask() -> None:
     assert len(encoded.legal_action_mask) == ACTION_COUNT
     assert sum(encoded.legal_action_mask) == 1
     assert (
-        encoded.legal_action_mask[
-            card_to_action_index(Card(Suit.HERZ, Rank.SEVEN))
-        ]
+        encoded.legal_action_mask[card_to_action_index(Card(Suit.HERZ, Rank.SEVEN))]
         == 1
     )
 

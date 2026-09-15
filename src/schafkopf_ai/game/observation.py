@@ -1,7 +1,5 @@
 from dataclasses import dataclass
 
-from schafkopf_ai.game.scoring import points_by_player
-
 from .card import Card
 from .game_contract import GameContract
 from .trick import TrickPlay

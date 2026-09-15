@@ -36,14 +36,10 @@ def validate_round(result: RoundResult) -> None:
         raise RuntimeError("At least one player still holds cards after the round.")
 
     if sum(result.player_points) != 120:
-        raise RuntimeError(
-            f"Augen do not sum to 120: {result.player_points}."
-        )
+        raise RuntimeError(f"Augen do not sum to 120: {result.player_points}.")
 
     if sum(result.payments) != 0:
-        raise RuntimeError(
-            f"Payments do not sum to zero: {result.payments}."
-        )
+        raise RuntimeError(f"Payments do not sum to zero: {result.payments}.")
 
     if result.redeals != 0:
         raise RuntimeError(
@@ -123,7 +119,7 @@ def run_simulation(*, games: int, seed: int, progress_every: int) -> None:
     print(f"Elapsed:            {elapsed:.3f} s")
     print(f"Throughput:         {games_per_second:.1f} games/s")
     print(f"Time per game:      {(elapsed / games) * 1_000:.3f} ms")
-    print(f"Invariant failures: 0")
+    print("Invariant failures: 0")
 
     print("\nContracts")
     print("-" * 60)

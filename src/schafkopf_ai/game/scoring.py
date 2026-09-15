@@ -4,7 +4,6 @@ from .card import Card, Rank
 from .game_contract import GameContract
 from .trick import Trick
 
-
 PLAYER_COUNT = 4
 TRICKS_PER_GAME = 8
 TOTAL_GAME_POINTS = 120

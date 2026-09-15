@@ -11,7 +11,6 @@ from schafkopf_ai.game.bidding import (
     BiddingState,
     BidValues,
 )
-from schafkopf_ai.game.card import Card
 from schafkopf_ai.game.deck import Deck
 from schafkopf_ai.game.game_contract import GameContract
 from schafkopf_ai.game.game_result import (

@@ -1,15 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from math import prod
-from typing import Iterable
 
 from schafkopf_ai.game.card import Card, Rank, Suit
 from schafkopf_ai.game.game_type import GameType
 from schafkopf_ai.game.observation import PlayerObservation
 from schafkopf_ai.game.trick import card_beats, plain_card_strength
 from schafkopf_ai.game.trump import is_trump, trump_strength
-
 
 PLAYER_COUNT = 4
 CARDS_PER_PLAYER = 8
@@ -63,8 +62,7 @@ class PublicCardKnowledge:
             plays_by_player[play.player] += 1
 
         remaining = tuple(
-            CARDS_PER_PLAYER - plays_by_player[player]
-            for player in range(PLAYER_COUNT)
+            CARDS_PER_PLAYER - plays_by_player[player] for player in range(PLAYER_COUNT)
         )
 
         return cls(
@@ -82,16 +80,12 @@ class PublicCardKnowledge:
     @property
     def unseen_trumps(self) -> tuple[Card, ...]:
         contract = self.observation.contract
-        return tuple(
-            card for card in self.unseen_cards if is_trump(card, contract)
-        )
+        return tuple(card for card in self.unseen_cards if is_trump(card, contract))
 
     @property
     def own_trumps(self) -> tuple[Card, ...]:
         contract = self.observation.contract
-        return tuple(
-            card for card in self.observation.hand if is_trump(card, contract)
-        )
+        return tuple(card for card in self.observation.hand if is_trump(card, contract))
 
     @property
     def remaining_trump_count(self) -> int:
@@ -193,15 +187,15 @@ class PublicCardKnowledge:
         if not candidates:
             return (0.0, 0.0, 0.0, 0.0)
 
-        total_slots = sum(self.remaining_cards_by_player[player] for player in candidates)
+        total_slots = sum(
+            self.remaining_cards_by_player[player] for player in candidates
+        )
         if total_slots <= 0:
             return (0.0, 0.0, 0.0, 0.0)
 
         probabilities = [0.0] * PLAYER_COUNT
         for player in candidates:
-            probabilities[player] = (
-                self.remaining_cards_by_player[player] / total_slots
-            )
+            probabilities[player] = self.remaining_cards_by_player[player] / total_slots
 
         return (
             probabilities[0],
@@ -218,9 +212,7 @@ class PublicCardKnowledge:
         selected = frozenset(players)
         probabilities = self.holder_probabilities(card)
         return sum(
-            probabilities[player]
-            for player in selected
-            if 0 <= player < PLAYER_COUNT
+            probabilities[player] for player in selected if 0 <= player < PLAYER_COUNT
         )
 
     def probability_any_card_with_players(
@@ -286,9 +278,7 @@ class PublicCardKnowledge:
     ) -> float:
         """Estimate known-void opponents' chance of holding at least one trump."""
         vulnerable_players = tuple(
-            player
-            for player in opponents
-            if suit in self.voids.plain_suits[player]
+            player for player in opponents if suit in self.voids.plain_suits[player]
         )
         if not vulnerable_players:
             return 0.0
