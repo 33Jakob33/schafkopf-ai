@@ -90,9 +90,6 @@ class StrategicHeuristicAgent(HeuristicAgent):
                     key=lambda card: self._card_cost(card, contract),
                 )
 
-        if role in {PlayerRole.DECLARER, PlayerRole.PARTNER}:
-            return None
-
         return None
 
     def _role_specific_lead(
@@ -132,9 +129,28 @@ class StrategicHeuristicAgent(HeuristicAgent):
             if safe_aces:
                 return max(safe_aces, key=card_points)
 
+            # In Sauspiel, the declarer should not voluntarily search their own
+            # partner. Prefer another suit when a reasonable alternative exists.
+            if (
+                contract.game_type is GameType.SAUSPIEL
+                and not called_ace_has_been_played(observation)
+                and not observation.called_ace_released
+            ):
+                alternatives = tuple(
+                    card
+                    for card in legal_cards
+                    if (
+                        not is_trump(card, contract)
+                        and card.suit is not contract.called_suit
+                    )
+                )
+                if alternatives:
+                    return min(
+                        alternatives,
+                        key=lambda card: self._card_cost(card, contract),
+                    )
+
         if role is PlayerRole.PARTNER:
-            # The Sauspiel partner should generally preserve the called suit
-            # rather than voluntarily exposing it. Cash a safe side Ace first.
             safe_aces = tuple(
                 card
                 for card in self._safe_aces(observation, legal_cards, knowledge)
@@ -143,13 +159,32 @@ class StrategicHeuristicAgent(HeuristicAgent):
             if safe_aces:
                 return max(safe_aces, key=card_points)
 
+            if (
+                contract.game_type is GameType.SAUSPIEL
+                and not called_ace_has_been_played(observation)
+                and not observation.called_ace_released
+            ):
+                alternatives = tuple(
+                    card
+                    for card in legal_cards
+                    if (
+                        not is_trump(card, contract)
+                        and card.suit is not contract.called_suit
+                    )
+                )
+                if alternatives:
+                    return min(
+                        alternatives,
+                        key=lambda card: self._card_cost(card, contract),
+                    )
+
         if role is PlayerRole.DEFENDER:
             safe_aces = self._safe_aces(observation, legal_cards, knowledge)
             if safe_aces:
                 return max(safe_aces, key=card_points)
 
-            # Against Solo/Wenz/Geier, forcing the declarer to spend trump is
-            # useful when we can lead a suit in which declarer is known void.
+            # Against Solo/Wenz/Geier, force the declarer to spend trump when
+            # they are publicly known void in the led suit.
             declarer = contract.declarer
             if declarer is not None:
                 forcing = tuple(
@@ -196,8 +231,6 @@ class StrategicHeuristicAgent(HeuristicAgent):
         )
         score = score_situation(observation)
 
-        # If this trick can mathematically secure the game or avoid Schneider,
-        # spend enough strength to make the win as safe as possible.
         if winning_cards and score is not None:
             max_added = max(card_points(card) for card in winning_cards)
             projected = trick_points_now + max_added
@@ -220,9 +253,37 @@ class StrategicHeuristicAgent(HeuristicAgent):
             current_winner.player,
         )
 
+        # If a teammate behind us has a good chance to beat the current winner,
+        # avoid wasting a stronger winning card ourselves unless score pressure
+        # makes the trick urgent.
+        teammate_behind_can_win = self._teammate_behind_can_still_win(
+            observation,
+            knowledge,
+            current_winner.card,
+            lead_card,
+            players_behind,
+        )
+        urgent = False
+        if score is not None:
+            maximum_trick = trick_points_now + max(
+                (card_points(card) for card in legal_cards),
+                default=0,
+            )
+            urgent = (
+                score.trick_clinches_game(maximum_trick)
+                or score.trick_avoids_schneider(maximum_trick)
+            )
+
+        if (
+            teammate_probability < self.config.teammate_confidence
+            and teammate_behind_can_win
+            and losing_cards
+            and not urgent
+        ):
+            return self._best_sacrifice(observation, losing_cards, knowledge)
+
         if teammate_probability >= self.config.teammate_confidence and losing_cards:
             if not players_behind:
-                # Guaranteed teammate trick: smear useful points deliberately.
                 return max(
                     losing_cards,
                     key=lambda card: (
@@ -231,15 +292,7 @@ class StrategicHeuristicAgent(HeuristicAgent):
                     ),
                 )
 
-            if self._teammate_behind_can_still_win(
-                observation,
-                knowledge,
-                current_winner.card,
-                lead_card,
-                players_behind,
-            ):
-                # Do not burn a high trump when another team member can plausibly
-                # take over later in the same trick.
+            if teammate_behind_can_win and not urgent:
                 return self._best_sacrifice(observation, losing_cards, knowledge)
 
         if winning_cards:
