@@ -25,6 +25,14 @@ from .heuristic_knowledge import (
     infer_voids,
 )
 
+__all__ = [
+    "HeuristicAgent",
+    "HeuristicConfig",
+    "InferredVoids",
+    "PublicCardKnowledge",
+    "infer_voids",
+]
+
 
 BID_SCORE_THRESHOLDS: dict[GameType, float] = {
     GameType.SAUSPIEL: 18.0,
@@ -396,8 +404,6 @@ class HeuristicAgent(Agent):
         called_ace = Card(called_suit, Rank.ACE)
         partner = self._known_sauspiel_partner(observation)
 
-        # The called-Ace holder can reveal and cash the Ace early when known
-        # void opponents are unlikely to trump it.
         if called_ace in observation.hand and called_ace in legal_cards:
             opponents = self._possible_opponents(observation, knowledge)
             ruff_risk = knowledge.probability_suit_gets_trumped(
@@ -410,8 +416,6 @@ class HeuristicAgent(Agent):
             ):
                 return called_ace
 
-        # Declarer searches for the partner by leading a cheap called-suit card.
-        # Once Davonlaufen released the Ace, this no longer guarantees a reveal.
         if (
             observation.player_index == declarer
             and partner is None
@@ -433,9 +437,6 @@ class HeuristicAgent(Agent):
                     key=lambda card: self._card_cost(card, contract),
                 )
 
-        # Defenders generally avoid gifting the unrevealed called Ace an easy
-        # trick. Declarer-side play can use the suit normally once partner is
-        # known or the Ace has been played.
         return None
 
     def _trump_draw_plan(
@@ -449,16 +450,12 @@ class HeuristicAgent(Agent):
         if declarer is None or observation.trick_number > self.config.draw_trumps_until_trick:
             return None
 
-        own_trumps = tuple(
-            card for card in legal_cards if is_trump(card, contract)
-        )
+        own_trumps = tuple(card for card in legal_cards if is_trump(card, contract))
         if len(own_trumps) < 2 or knowledge.remaining_trump_count == 0:
             return None
 
         controlling = tuple(
-            card
-            for card in own_trumps
-            if not knowledge.unseen_higher_trumps(card)
+            card for card in own_trumps if not knowledge.unseen_higher_trumps(card)
         )
         if not controlling:
             return None
@@ -481,8 +478,6 @@ class HeuristicAgent(Agent):
                 return cheapest_controller
             return None
 
-        # Wenz/Geier defenders with top control may deliberately pull the
-        # declarer's scarce trumps. In Sauspiel/Solo this is usually too costly.
         if contract.game_type in {GameType.WENZ, GameType.GEIER}:
             probability_declarer_has_trump = knowledge.probability_players_have_trump(
                 {declarer}
@@ -498,12 +493,6 @@ class HeuristicAgent(Agent):
         legal_cards: tuple[Card, ...],
         knowledge: PublicCardKnowledge,
     ) -> Card | None:
-        """
-        Sacrifice a cheap card from a long suit to establish later winners.
-
-        Example: with Ten + small cards while the Ace is still unseen, a small
-        lead can draw the Ace and make the Ten a future master card.
-        """
         if observation.trick_number >= 7 or self._score_urgency(observation) >= 2.0:
             return None
 
@@ -540,8 +529,6 @@ class HeuristicAgent(Agent):
                 legal_in_suit,
                 key=lambda card: self._card_cost(card, contract),
             )
-            if sacrifice == strongest and len(cards) == 1:
-                continue
 
             future_value = (
                 card_points(strongest)
@@ -592,8 +579,6 @@ class HeuristicAgent(Agent):
         trick_value = sum(card_points(play.card) for play in observation.current_trick)
         urgency = self._score_urgency(observation)
 
-        # Do not overtake a likely teammate. When last, intentionally smear a
-        # valuable card because the trick is then guaranteed for our side.
         if teammate_probability >= self.config.teammate_confidence and losing_cards:
             if last_to_play:
                 return max(
@@ -634,8 +619,6 @@ class HeuristicAgent(Agent):
                 )
             )
 
-            # Intentional sacrifice: on a cheap trick, preserve an expensive
-            # trump if players behind are likely to overtake it anyway.
             if (
                 not should_take
                 and losing_cards
@@ -649,8 +632,6 @@ class HeuristicAgent(Agent):
         if losing_cards:
             return self._best_discard(observation, losing_cards, knowledge)
 
-        # Every legal card wins; choose the cheapest winner, adjusted for the
-        # chance that a later player can still overtake it.
         return self._best_winning_card(
             observation,
             legal_cards,
@@ -700,8 +681,6 @@ class HeuristicAgent(Agent):
             suit_length = self._own_plain_suit_length(observation, card.suit)
             create_void_bonus = 4.0 if suit_length == 1 and knowledge.own_trumps else 0.0
 
-            # In Sauspiel, defenders avoid casually throwing the unrevealed
-            # called-suit card because preserving that suit can matter later.
             called_suit_penalty = 0.0
             if (
                 contract.game_type is GameType.SAUSPIEL
@@ -736,9 +715,6 @@ class HeuristicAgent(Agent):
             )
             points = card_points(card)
             trump_penalty = 5.0 if is_trump(card, observation.contract) else 0.0
-
-            # High-point cards are attractive leads only when someone else is
-            # likely to beat them. Otherwise prefer cheap cards and avoid taking.
             return (
                 probability_beaten * (16.0 + points * 2.5)
                 + points * probability_beaten
@@ -777,8 +753,6 @@ class HeuristicAgent(Agent):
             current_points = observation.points_by_player[current_winner.player]
             highest_points = max(observation.points_by_player)
             target_bonus = 5.0 if current_points == highest_points else 0.0
-
-            # Intentionally dump dangerous points onto somebody else's trick.
             return max(
                 losing_cards,
                 key=lambda card: (
@@ -788,8 +762,6 @@ class HeuristicAgent(Agent):
                 ),
             )
 
-        # Forced to play a currently winning card. Prefer a card likely to be
-        # overtaken by someone behind; if last, minimize what we add to our win.
         if players_behind:
             return max(
                 legal_cards,
@@ -884,9 +856,6 @@ class HeuristicAgent(Agent):
         if other_player == declarer:
             return 0.0
 
-        # A non-declarer who does not hold the called Ace knows they are a
-        # defender. Another non-declarer is their teammate exactly when that
-        # other player is not the hidden partner.
         return 1.0 - partner_probabilities[other_player]
 
     def _possible_opponents(
@@ -931,7 +900,6 @@ class HeuristicAgent(Agent):
         return None
 
     def _score_urgency(self, observation: PlayerObservation) -> float:
-        """Return 0..3 pressure based on win/Schneider thresholds and game stage."""
         team = self._exact_team_context(observation)
         if team is None:
             return 0.0
@@ -952,8 +920,6 @@ class HeuristicAgent(Agent):
         if points_needed <= 8:
             urgency += 0.5
 
-        # Escape Schneider if our side is still at/below the relevant border,
-        # or protect a Schneider if the opponents remain below it late.
         own_schneider_border = 30 if own_is_declarer_side else 29
         opponent_schneider_border = 29 if own_is_declarer_side else 30
         if observation.trick_number >= 6 and own_points <= own_schneider_border:
@@ -1018,7 +984,6 @@ class HeuristicAgent(Agent):
             ruff_risk = knowledge.probability_suit_gets_trumped(card.suit, opponents)
             score -= ruff_risk * 8.0
 
-            # Avoid leading the unrevealed called suit as a defender.
             if (
                 contract.game_type is GameType.SAUSPIEL
                 and contract.called_suit is card.suit
@@ -1050,8 +1015,6 @@ class HeuristicAgent(Agent):
         if suit_length >= self.config.long_suit_minimum:
             value += suit_length * 1.25
 
-        # Playing the final card of a suit can create a future ruff opportunity
-        # when we retain trumps: an intentional multi-trick sacrifice.
         if suit_length == 1 and knowledge.own_trumps:
             value += 2.5
 
