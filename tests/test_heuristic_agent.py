@@ -234,7 +234,39 @@ def test_wenz_declarer_draws_trumps_with_top_control() -> None:
     }
 
 
-def test_follow_uses_cheapest_sufficient_trump_on_valuable_trick() -> None:
+def test_follow_uses_cheapest_sufficient_trump_when_last_to_play() -> None:
+    agent = HeuristicAgent()
+    contract = GameContract(GameType.WENZ, declarer=0)
+    low_trump = Card(Suit.SCHELLEN, Rank.UNTER)
+    high_trump = Card(Suit.EICHEL, Rank.UNTER)
+    observation = PlayerObservation(
+        player_index=0,
+        hand=(
+            low_trump,
+            high_trump,
+            Card(Suit.SCHELLEN, Rank.SEVEN),
+        ),
+        contract=contract,
+        current_player=0,
+        current_trick=(
+            TrickPlay(1, Card(Suit.GRAS, Rank.ACE)),
+            TrickPlay(2, Card(Suit.GRAS, Rank.TEN)),
+            TrickPlay(3, Card(Suit.GRAS, Rank.KING)),
+        ),
+        completed_tricks=(),
+        points_by_player=(0, 0, 0, 0),
+        called_ace_released=False,
+    )
+
+    chosen = agent.choose_card(
+        observation,
+        (low_trump, high_trump, Card(Suit.SCHELLEN, Rank.SEVEN)),
+    )
+
+    assert chosen == low_trump
+
+
+def test_follow_secures_valuable_trick_when_overtrump_risk_remains() -> None:
     agent = HeuristicAgent()
     contract = GameContract(GameType.WENZ, declarer=0)
     low_trump = Card(Suit.SCHELLEN, Rank.UNTER)
@@ -262,7 +294,7 @@ def test_follow_uses_cheapest_sufficient_trump_on_valuable_trick() -> None:
         (low_trump, high_trump, Card(Suit.SCHELLEN, Rank.SEVEN)),
     )
 
-    assert chosen == low_trump
+    assert chosen == high_trump
 
 
 def test_ramsch_dumps_points_when_other_player_is_winning() -> None:
