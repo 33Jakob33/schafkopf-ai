@@ -230,9 +230,7 @@ def run_evaluation(*, games: int, seed: int, progress_every: int) -> None:
         game_type: ComparisonStats() for game_type in GameType
     }
     by_role: dict[str, ComparisonStats] = defaultdict(ComparisonStats)
-    by_seat: dict[int, ComparisonStats] = {
-        seat: ComparisonStats() for seat in range(4)
-    }
+    by_seat: dict[int, ComparisonStats] = {seat: ComparisonStats() for seat in range(4)}
     by_start_offset: dict[int, ComparisonStats] = {
         offset: ComparisonStats() for offset in range(4)
     }
@@ -352,12 +350,8 @@ def run_evaluation(*, games: int, seed: int, progress_every: int) -> None:
     print(f"Strategic mean payment:     {overall.mean_strategic:+.3f}")
     print(f"Mean paired improvement:    {overall.mean_difference:+.3f}")
     print(f"95% CI paired improvement:  [{ci_low:+.3f}, {ci_high:+.3f}]")
-    print(
-        f"Original win rate:          {overall.original_wins / games:>8.2%}"
-    )
-    print(
-        f"Strategic win rate:         {overall.strategic_wins / games:>8.2%}"
-    )
+    print(f"Original win rate:          {overall.original_wins / games:>8.2%}")
+    print(f"Strategic win rate:         {overall.strategic_wins / games:>8.2%}")
     print(
         f"Total payment improvement:  "
         f"{overall.strategic_payment - overall.original_payment:>+10,}"
