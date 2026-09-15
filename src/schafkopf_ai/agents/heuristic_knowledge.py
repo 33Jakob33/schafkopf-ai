@@ -35,6 +35,10 @@ class PublicCardKnowledge:
     they distribute each unseen card across players who could still hold it,
     weighted by those players' remaining hand sizes and constrained by proven
     suit/trump voids.
+
+    Exact statements are kept separate from probabilistic ones. For example,
+    `is_definite_master_trump` is exact given the visible/own cards, while
+    `ace_safety_probability` is an approximate hidden-hand estimate.
     """
 
     observation: PlayerObservation
@@ -89,7 +93,7 @@ class PublicCardKnowledge:
 
     @property
     def remaining_trump_count(self) -> int:
-        """Return the number of trumps that remain outside the observer's hand."""
+        """Return trumps that remain outside the observer's own hand."""
         return len(self.unseen_trumps)
 
     def unseen_higher_trumps(self, card: Card) -> tuple[Card, ...]:
@@ -121,13 +125,19 @@ class PublicCardKnowledge:
         )
 
     def is_master_card(self, card: Card) -> bool:
-        """Return whether no unseen card can beat this card in its own category."""
+        """Return whether no unseen card can beat this card in its category."""
         contract = self.observation.contract
 
         if is_trump(card, contract):
             return not self.unseen_higher_trumps(card)
 
         return not self.unseen_higher_plain_cards(card)
+
+    def is_definite_master_trump(self, card: Card) -> bool:
+        """Return whether no card outside our hand can overtrump this trump."""
+        if not is_trump(card, self.observation.contract):
+            return False
+        return not self.unseen_higher_trumps(card)
 
     def possible_holders(self, card: Card) -> tuple[int, ...]:
         """Return players who could hold a particular unseen card."""
@@ -164,9 +174,8 @@ class PublicCardKnowledge:
         if candidates:
             return tuple(candidates)
 
-        # Inferences should normally remain consistent. Falling back to all
-        # players with available slots keeps probability helpers robust if a
-        # partially constructed test observation is inconsistent.
+        # Partially constructed test observations can be inconsistent. Keep
+        # probability helpers robust rather than inventing certainty from that.
         return tuple(
             player
             for player in range(PLAYER_COUNT)
@@ -177,12 +186,7 @@ class PublicCardKnowledge:
         )
 
     def holder_probabilities(self, card: Card) -> tuple[float, float, float, float]:
-        """
-        Approximate P(player holds card) for one unseen card.
-
-        Probabilities sum to one for unseen cards and to zero for cards already
-        known through the observer's hand or public play.
-        """
+        """Approximate P(player holds card) for one unseen card."""
         candidates = self.possible_holders(card)
         if not candidates:
             return (0.0, 0.0, 0.0, 0.0)
@@ -223,9 +227,8 @@ class PublicCardKnowledge:
         """
         Approximate probability that selected players hold at least one card.
 
-        Individual unseen-card locations are treated as independent for this
-        lightweight heuristic estimate. This is intentionally not a full
-        Bayesian hand enumerator.
+        Individual unseen-card locations are treated as independent. This is a
+        deliberately lightweight approximation, not a full hand enumerator.
         """
         selected = frozenset(players)
         card_probabilities = [
@@ -245,6 +248,58 @@ class PublicCardKnowledge:
             self.unseen_trumps,
             players,
         )
+
+    def probability_player_has_plain_suit(self, player: int, suit: Suit) -> float:
+        """Approximate probability that one player can still follow a plain suit."""
+        if player == self.observation.player_index:
+            return float(
+                any(
+                    card.suit is suit
+                    and not is_trump(card, self.observation.contract)
+                    for card in self.observation.hand
+                )
+            )
+
+        if suit in self.voids.plain_suits[player]:
+            return 0.0
+
+        remaining_suit_cards = tuple(
+            card
+            for card in self.unseen_cards
+            if (
+                card.suit is suit
+                and not is_trump(card, self.observation.contract)
+            )
+        )
+        return self.probability_any_card_with_players(
+            remaining_suit_cards,
+            {player},
+        )
+
+    def probability_player_can_trump_suit(self, player: int, suit: Suit) -> float:
+        """Approximate probability that `player` can ruff a lead of `suit`."""
+        if player == self.observation.player_index:
+            has_plain = any(
+                card.suit is suit
+                and not is_trump(card, self.observation.contract)
+                for card in self.observation.hand
+            )
+            has_trump = bool(self.own_trumps)
+            return float(not has_plain and has_trump)
+
+        if player in self.voids.trump_void_players:
+            return 0.0
+
+        if suit in self.voids.plain_suits[player]:
+            probability_void = 1.0
+        else:
+            probability_void = 1.0 - self.probability_player_has_plain_suit(
+                player,
+                suit,
+            )
+
+        probability_trump = self.probability_players_have_trump({player})
+        return min(1.0, probability_void * probability_trump)
 
     def probability_overtaken(
         self,
@@ -276,14 +331,28 @@ class PublicCardKnowledge:
         suit: Suit,
         opponents: Iterable[int],
     ) -> float:
-        """Estimate known-void opponents' chance of holding at least one trump."""
-        vulnerable_players = tuple(
-            player for player in opponents if suit in self.voids.plain_suits[player]
-        )
-        if not vulnerable_players:
+        """Estimate probability that at least one opponent can ruff this suit."""
+        probabilities = [
+            self.probability_player_can_trump_suit(player, suit)
+            for player in frozenset(opponents)
+            if player != self.observation.player_index
+        ]
+        if not probabilities:
             return 0.0
 
-        return self.probability_players_have_trump(vulnerable_players)
+        probability_none = prod(1.0 - min(1.0, p) for p in probabilities)
+        return 1.0 - probability_none
+
+    def ace_safety_probability(
+        self,
+        card: Card,
+        opponents: Iterable[int],
+    ) -> float:
+        """Estimate the chance a plain Ace survives without being ruffed."""
+        if card.rank is not Rank.ACE or is_trump(card, self.observation.contract):
+            raise ValueError("Ace safety requires a plain Ace.")
+
+        return 1.0 - self.probability_suit_gets_trumped(card.suit, opponents)
 
 
 def infer_voids(observation: PlayerObservation) -> InferredVoids:
