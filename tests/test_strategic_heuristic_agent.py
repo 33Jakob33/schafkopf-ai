@@ -97,7 +97,7 @@ def test_sauspiel_called_ace_holder_knows_they_are_partner() -> None:
 def test_public_knowledge_identifies_definite_master_trump() -> None:
     contract = GameContract(GameType.WENZ, declarer=0)
     top_trump = Card(Suit.EICHEL, Rank.UNTER)
-    lower_trump = Card(Suit.GRAS, Rank.UNTER)
+    lower_trump = Card(Suit.SCHELLEN, Rank.UNTER)
     observation = _observation(
         player_index=0,
         hand=(top_trump, lower_trump),
