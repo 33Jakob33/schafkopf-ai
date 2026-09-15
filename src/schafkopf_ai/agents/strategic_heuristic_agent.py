@@ -108,9 +108,7 @@ class StrategicHeuristicAgent(HeuristicAgent):
 
         if role is PlayerRole.DECLARER:
             master_trumps = tuple(
-                card
-                for card in legal_cards
-                if knowledge.is_definite_master_trump(card)
+                card for card in legal_cards if knowledge.is_definite_master_trump(card)
             )
 
             # A declarer with exact trump control can safely pull enemy trumps.
@@ -234,10 +232,9 @@ class StrategicHeuristicAgent(HeuristicAgent):
         if winning_cards and score is not None:
             max_added = max(card_points(card) for card in winning_cards)
             projected = trick_points_now + max_added
-            high_priority = (
-                score.trick_clinches_game(projected)
-                or score.trick_avoids_schneider(projected)
-            )
+            high_priority = score.trick_clinches_game(
+                projected
+            ) or score.trick_avoids_schneider(projected)
             if high_priority:
                 return self._safest_winner(
                     observation,
@@ -269,10 +266,9 @@ class StrategicHeuristicAgent(HeuristicAgent):
                 (card_points(card) for card in legal_cards),
                 default=0,
             )
-            urgent = (
-                score.trick_clinches_game(maximum_trick)
-                or score.trick_avoids_schneider(maximum_trick)
-            )
+            urgent = score.trick_clinches_game(
+                maximum_trick
+            ) or score.trick_avoids_schneider(maximum_trick)
 
         if (
             teammate_probability < self.config.teammate_confidence

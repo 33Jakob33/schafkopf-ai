@@ -58,7 +58,9 @@ def test_sauspiel_defender_searches_called_suit() -> None:
     assert chosen == search_card
 
 
-def test_sauspiel_declarer_does_not_search_called_suit_when_alternative_exists() -> None:
+def test_sauspiel_declarer_does_not_search_called_suit_when_alternative_exists() -> (
+    None
+):
     agent = StrategicHeuristicAgent()
     contract = GameContract(
         GameType.SAUSPIEL,

@@ -41,13 +41,15 @@ class ScoreSituation:
 
     def trick_avoids_schneider(self, trick_points: int) -> bool:
         return (
-            self.own_points < self.own_avoid_schneider_target
+            self.own_points
+            < self.own_avoid_schneider_target
             <= self.own_points + trick_points
         )
 
     def losing_trick_breaks_schneider(self, trick_points: int) -> bool:
         return (
-            self.opponent_points < self.opponent_avoid_schneider_target
+            self.opponent_points
+            < self.opponent_avoid_schneider_target
             <= self.opponent_points + trick_points
         )
 
@@ -86,9 +88,7 @@ def called_ace_has_been_played(observation: PlayerObservation) -> bool:
     if ace is None:
         return False
     return any(
-        play.card == ace
-        for trick in observation.completed_tricks
-        for play in trick
+        play.card == ace for trick in observation.completed_tricks for play in trick
     ) or any(play.card == ace for play in observation.current_trick)
 
 
@@ -141,9 +141,7 @@ def exact_team_context(observation: PlayerObservation) -> TeamContext | None:
     else:
         return None
 
-    defender_team = frozenset(
-        index for index in range(4) if index not in declarer_team
-    )
+    defender_team = frozenset(index for index in range(4) if index not in declarer_team)
 
     if player in declarer_team:
         return TeamContext(

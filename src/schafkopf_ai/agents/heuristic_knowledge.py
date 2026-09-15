@@ -254,8 +254,7 @@ class PublicCardKnowledge:
         if player == self.observation.player_index:
             return float(
                 any(
-                    card.suit is suit
-                    and not is_trump(card, self.observation.contract)
+                    card.suit is suit and not is_trump(card, self.observation.contract)
                     for card in self.observation.hand
                 )
             )
@@ -266,10 +265,7 @@ class PublicCardKnowledge:
         remaining_suit_cards = tuple(
             card
             for card in self.unseen_cards
-            if (
-                card.suit is suit
-                and not is_trump(card, self.observation.contract)
-            )
+            if (card.suit is suit and not is_trump(card, self.observation.contract))
         )
         return self.probability_any_card_with_players(
             remaining_suit_cards,
@@ -280,8 +276,7 @@ class PublicCardKnowledge:
         """Approximate probability that `player` can ruff a lead of `suit`."""
         if player == self.observation.player_index:
             has_plain = any(
-                card.suit is suit
-                and not is_trump(card, self.observation.contract)
+                card.suit is suit and not is_trump(card, self.observation.contract)
                 for card in self.observation.hand
             )
             has_trump = bool(self.own_trumps)
