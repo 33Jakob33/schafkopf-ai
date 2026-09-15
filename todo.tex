@@ -1,0 +1,56 @@
+
+Round setup / complete runner
+Deal automatically.
+Run bidding.
+Build the resulting GameState.
+Play eight tricks.
+Calculate result.
+
+Return something like:
+
+result = round_runner.run()
+At that point four agents can play an entire Schafkopf round with zero manual setup.
+
+
+Simulation + validation
+Run 10,000–100,000 random games.
+Assert:
+exactly 32 cards played;
+exactly eight tricks;
+exactly 120 Augen;
+no illegal moves;
+no duplicate cards;
+no hidden information leaks;
+reproducibility with seeds.
+This is particularly valuable before training anything, because an RL agent will exploit bugs in the environment mercilessly.
+
+
+Action/observation encoding
+Define stable card IDs 0–31.
+Card ↔ action_index.
+32-dimensional legal-action mask.
+Convert PlayerObservation into numerical features.
+This becomes the bridge between your Python engine and PyTorch.
+
+
+HeuristicAgent
+I’d actually build this before the neural network.
+Examples:
+take valuable tricks when sensible;
+conserve high trumps;
+infer exhausted suits;
+basic partner behavior in Sauspiel.
+
+Then we have a meaningful baseline:
+
+RandomAgent < HeuristicAgent < LearnedAgent
+
+
+Benchmarking framework
+Thousands of games between agent versions.
+Win rate.
+Average Augen.
+Average game value.
+Position-adjusted results.
+Eventually Elo-style rating.
+This will be one of the strongest parts of the GitHub README.

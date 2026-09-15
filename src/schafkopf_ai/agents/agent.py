@@ -1,5 +1,9 @@
 from abc import ABC, abstractmethod
 
+from schafkopf_ai.game.bidding import (
+    BiddingAction,
+    BiddingObservation,
+)
 from schafkopf_ai.game.card import Card
 from schafkopf_ai.game.observation import PlayerObservation
 
@@ -39,4 +43,13 @@ class Agent(ABC):
                 Agents should raise an error if no legal actions
                 are available.
         """
+        raise NotImplementedError
+
+    @abstractmethod
+    def choose_bidding_action(
+        self,
+        observation: BiddingObservation,
+        legal_actions: tuple[BiddingAction, ...],
+    ) -> BiddingAction:
+        """Choose one legal bidding action."""
         raise NotImplementedError

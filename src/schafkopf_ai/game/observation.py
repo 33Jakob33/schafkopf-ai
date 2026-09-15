@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from schafkopf_ai.game.scoring import points_by_player
+
 from .card import Card
 from .game_contract import GameContract
 from .trick import TrickPlay
@@ -23,6 +25,7 @@ class PlayerObservation:
 
     current_trick: tuple[TrickPlay, ...]
     completed_tricks: tuple[tuple[TrickPlay, ...], ...]
+    points_by_player: tuple[int, int, int, int]
 
     called_ace_released: bool
 

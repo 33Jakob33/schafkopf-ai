@@ -13,18 +13,27 @@ class GameContract:
         Requires a trump suit.
 
     Sauspiel:
-        Requires a called suit. Herz cannot be called because Herz
-        is trump in a Sauspiel.
+        Requires a called suit.
 
-    Other currently supported games:
-        Require neither.
+    declarer:
+        Player who announced the game. Required when determining
+        the result of Sauspiel, Solo, Wenz and Geier.
+
+        Ramsch has no declarer.
     """
 
     game_type: GameType
     trump_suit: Suit | None = None
     called_suit: Suit | None = None
+    declarer: int | None = None
 
     def __post_init__(self) -> None:
+        if self.declarer is not None and not 0 <= self.declarer < 4:
+            raise ValueError("Declarer must be a player index between 0 and 3.")
+
+        if self.game_type is GameType.RAMSCH and self.declarer is not None:
+            raise ValueError("Ramsch does not have a declarer.")
+
         if self.game_type is GameType.SOLO:
             if self.trump_suit is None:
                 raise ValueError("A Solo requires a trump suit.")

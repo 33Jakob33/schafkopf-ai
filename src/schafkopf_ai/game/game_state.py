@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-
+from .scoring import points_by_player
 from .card import Card, Rank
 from .game_contract import GameContract
 from .game_type import GameType
@@ -45,7 +45,14 @@ class GameState:
             players_by_index[index] for index in range(self.PLAYER_COUNT)
         )
 
+        self._initial_hands: tuple[
+            tuple[Card, ...],
+            ...,
+        ] = tuple(player.cards for player in self.players)
+
         self.contract = contract
+
+        self.called_ace_player = self._determine_called_ace_player()
 
         self.current_trick: Trick | None = Trick(starting_player=starting_player)
 
@@ -83,6 +90,13 @@ class GameState:
             contract=contract,
             starting_player=starting_player,
         )
+
+    @property
+    def initial_hands(
+        self,
+    ) -> tuple[tuple[Card, ...], ...]:
+        """Return an immutable snapshot of the original deal."""
+        return self._initial_hands
 
     @staticmethod
     def _validate_players(
@@ -127,6 +141,20 @@ class GameState:
         return self.current_trick.next_player
 
     @property
+    def player_points(
+        self,
+    ) -> tuple[int, int, int, int]:
+        """
+        Return the Augen currently collected by each player.
+
+        Only completed tricks count.
+        """
+        return points_by_player(
+            self._completed_tricks,
+            self.contract,
+        )
+
+    @property
     def is_complete(self) -> bool:
         """Return whether all eight tricks have been played."""
         return self.current_trick is None
@@ -139,6 +167,41 @@ class GameState:
             )
 
         return self.players[index]
+
+    def _determine_called_ace_player(
+        self,
+    ) -> int | None:
+        """
+        Determine who holds the called Ace at the start of a Sauspiel.
+
+        The information is stored because hands become empty during play.
+        """
+        if self.contract.game_type is not GameType.SAUSPIEL:
+            return None
+
+        called_suit = self.contract.called_suit
+
+        if called_suit is None:
+            raise ValueError("A Sauspiel requires a called suit.")
+
+        called_ace = Card(
+            suit=called_suit,
+            rank=Rank.ACE,
+        )
+
+        holders = [
+            player.index for player in self.players if player.has_card(called_ace)
+        ]
+
+        if len(holders) != 1:
+            raise ValueError("The called Ace must belong to exactly one player.")
+
+        holder = holders[0]
+
+        if self.contract.declarer is not None and holder == self.contract.declarer:
+            raise ValueError("The Sauspiel declarer cannot hold the called Ace.")
+
+        return holder
 
     def observation_for(
         self,
@@ -171,6 +234,7 @@ class GameState:
             current_player=self.current_player,
             current_trick=current_trick,
             completed_tricks=completed_tricks,
+            points_by_player=self.player_points,
             called_ace_released=self.called_ace_released,
         )
 
