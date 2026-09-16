@@ -7,7 +7,10 @@ authors = [
     { name = "jakob schleicher", email = "jakob.schleicher@web.de" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "numpy>=2.0",
+    "torch>=2.7",
+]
 
 [project.scripts]
 schafkopf-ai = "schafkopf_ai:main"
