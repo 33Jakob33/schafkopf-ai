@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import numpy as np
+
 from schafkopf_ai.agents.agent import Agent
 from schafkopf_ai.game.bidding import BiddingAction, BiddingObservation
 from schafkopf_ai.game.card import Card
@@ -7,8 +9,6 @@ from schafkopf_ai.game.observation import PlayerObservation
 
 from .behavior_cloning import BehaviorCloningArrays
 from .demonstrations import BehaviorCloningCollector
-
-import numpy as np
 
 
 class DAggerRecordingAgent(Agent):
