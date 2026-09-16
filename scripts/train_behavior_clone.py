@@ -149,16 +149,13 @@ def load_initial_weights(
         weights_only=True,
     )
     if not isinstance(checkpoint, dict):
-        raise ValueError("Initial checkpoint must be a dictionary.")
+        raise TypeError("Initial checkpoint must be a dictionary.")
 
     input_size = int(checkpoint.get("input_size", OBSERVATION_FEATURE_SIZE))
     action_count = int(checkpoint.get("action_count", ACTION_COUNT))
     raw_hidden_sizes = checkpoint.get("hidden_sizes", model.hidden_sizes)
 
-    if (
-        not isinstance(raw_hidden_sizes, (tuple, list))
-        or len(raw_hidden_sizes) != 2
-    ):
+    if not isinstance(raw_hidden_sizes, (tuple, list)) or len(raw_hidden_sizes) != 2:
         raise ValueError("Initial checkpoint hidden_sizes must contain two values.")
 
     hidden_sizes = (int(raw_hidden_sizes[0]), int(raw_hidden_sizes[1]))
@@ -181,7 +178,7 @@ def load_initial_weights(
 
     state_dict = checkpoint.get("model_state_dict")
     if not isinstance(state_dict, dict):
-        raise ValueError("Initial checkpoint does not contain model_state_dict.")
+        raise TypeError("Initial checkpoint does not contain model_state_dict.")
 
     model.load_state_dict(state_dict)
 
@@ -324,8 +321,7 @@ def train(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Train an MLP on heuristic demonstrations or an aggregated DAgger "
-            "dataset."
+            "Train an MLP on heuristic demonstrations or an aggregated DAgger dataset."
         )
     )
     parser.add_argument(

@@ -60,7 +60,7 @@ class NeuralCardPlayAgent(Agent):
         )
 
         if not isinstance(checkpoint, dict):
-            raise ValueError("Behavior-cloning checkpoint must be a dictionary.")
+            raise TypeError("Behavior-cloning checkpoint must be a dictionary.")
 
         input_size = int(checkpoint.get("input_size", OBSERVATION_FEATURE_SIZE))
         action_count = int(checkpoint.get("action_count", ACTION_COUNT))
@@ -93,7 +93,7 @@ class NeuralCardPlayAgent(Agent):
 
         state_dict: Any = checkpoint.get("model_state_dict")
         if not isinstance(state_dict, dict):
-            raise ValueError("Checkpoint does not contain model_state_dict.")
+            raise TypeError("Checkpoint does not contain model_state_dict.")
         model.load_state_dict(state_dict)
 
         return cls(model=model, device=device)
