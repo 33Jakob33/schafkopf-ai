@@ -96,9 +96,7 @@ def run_epoch(
         loss=total_loss / total_examples,
         accuracy=total_correct / total_examples,
         nontrivial_accuracy=(
-            nontrivial_correct / nontrivial_examples
-            if nontrivial_examples
-            else 0.0
+            nontrivial_correct / nontrivial_examples if nontrivial_examples else 0.0
         ),
         examples=total_examples,
         nontrivial_examples=nontrivial_examples,

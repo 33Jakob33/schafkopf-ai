@@ -42,7 +42,9 @@ class NeuralCardPlayAgent(Agent):
         self.device = torch.device(device)
         self.model = model.to(self.device)
         self.model.eval()
-        self.bidding_agent = HeuristicAgent() if bidding_agent is None else bidding_agent
+        self.bidding_agent = (
+            HeuristicAgent() if bidding_agent is None else bidding_agent
+        )
 
     @classmethod
     def from_checkpoint(
@@ -64,7 +66,10 @@ class NeuralCardPlayAgent(Agent):
         action_count = int(checkpoint.get("action_count", ACTION_COUNT))
         hidden_sizes_raw = checkpoint.get("hidden_sizes", (512, 256))
 
-        if not isinstance(hidden_sizes_raw, (tuple, list)) or len(hidden_sizes_raw) != 2:
+        if (
+            not isinstance(hidden_sizes_raw, (tuple, list))
+            or len(hidden_sizes_raw) != 2
+        ):
             raise ValueError("Checkpoint hidden_sizes must contain exactly two values.")
 
         hidden_sizes = (int(hidden_sizes_raw[0]), int(hidden_sizes_raw[1]))

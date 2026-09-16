@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import torch
@@ -69,7 +70,7 @@ class CardPlayPolicyNetwork(nn.Module):
         )
 
     def forward(self, features: Tensor) -> Tensor:
-        return self.network(features)
+        return cast(Tensor, self.network(features))
 
 
 def mask_illegal_logits(logits: Tensor, legal_mask: Tensor) -> Tensor:
@@ -144,7 +145,9 @@ def split_indices_by_game(
 
     unique_games = sorted({int(game_id) for game_id in game_ids.tolist()})
     if len(unique_games) < 2:
-        raise ValueError("At least two games are required for a train/validation split.")
+        raise ValueError(
+            "At least two games are required for a train/validation split."
+        )
 
     rng = random.Random(seed)
     rng.shuffle(unique_games)

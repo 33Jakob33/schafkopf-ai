@@ -134,9 +134,7 @@ def run_evaluation(
             neural_payment,
         )
 
-        heuristic_wins += int(
-            focal_seat in heuristic_result.game_result.winner_players
-        )
+        heuristic_wins += int(focal_seat in heuristic_result.game_result.winner_players)
         neural_wins += int(focal_seat in neural_result.game_result.winner_players)
 
         if neural_payment > heuristic_payment:
