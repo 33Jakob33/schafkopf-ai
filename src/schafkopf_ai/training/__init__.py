@@ -1,3 +1,12 @@
+from .behavior_cloning import (
+    BehaviorCloningArrays,
+    BehaviorCloningDataset,
+    CardPlayPolicyNetwork,
+    load_behavior_cloning_arrays,
+    mask_illegal_logits,
+    save_behavior_cloning_arrays,
+    split_indices_by_game,
+)
 from .card_play_encoding import (
     ACTION_COUNT,
     CARD_COUNT,
@@ -12,18 +21,28 @@ from .card_play_encoding import (
     legal_action_mask,
     relative_player_index,
 )
+from .demonstrations import BehaviorCloningCollector, RecordingHeuristicAgent
 
 __all__ = [
     "ACTION_COUNT",
     "CARD_COUNT",
     "OBSERVATION_FEATURE_SIZE",
     "ActionMask",
+    "BehaviorCloningArrays",
+    "BehaviorCloningCollector",
+    "BehaviorCloningDataset",
+    "CardPlayPolicyNetwork",
     "EncodedCardPlayObservation",
     "FeatureVector",
+    "RecordingHeuristicAgent",
     "action_index_to_card",
     "card_to_action_index",
     "encode_card_play",
     "encode_player_observation",
     "legal_action_mask",
+    "load_behavior_cloning_arrays",
+    "mask_illegal_logits",
     "relative_player_index",
+    "save_behavior_cloning_arrays",
+    "split_indices_by_game",
 ]
