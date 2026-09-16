@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import numpy as np
 
 from schafkopf_ai.agents.heuristic_agent import HeuristicAgent
@@ -89,12 +87,8 @@ class BehaviorCloningCollector:
         )
 
 
-@dataclass(slots=True)
 class RecordingHeuristicAgent(HeuristicAgent):
     """Heuristic teacher that records every card-play decision it makes."""
-
-    collector: BehaviorCloningCollector
-    game_id: int
 
     def __init__(
         self,
