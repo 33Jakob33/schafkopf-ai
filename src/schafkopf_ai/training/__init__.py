@@ -21,6 +21,7 @@ from .card_play_encoding import (
     legal_action_mask,
     relative_player_index,
 )
+from .dagger import DAggerRecordingAgent, aggregate_dagger_arrays
 from .demonstrations import BehaviorCloningCollector, RecordingHeuristicAgent
 
 __all__ = [
@@ -32,10 +33,12 @@ __all__ = [
     "BehaviorCloningCollector",
     "BehaviorCloningDataset",
     "CardPlayPolicyNetwork",
+    "DAggerRecordingAgent",
     "EncodedCardPlayObservation",
     "FeatureVector",
     "RecordingHeuristicAgent",
     "action_index_to_card",
+    "aggregate_dagger_arrays",
     "card_to_action_index",
     "encode_card_play",
     "encode_player_observation",
