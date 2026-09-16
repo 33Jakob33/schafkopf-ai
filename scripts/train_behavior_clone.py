@@ -5,6 +5,7 @@ import random
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import torch
@@ -111,6 +112,7 @@ def save_checkpoint(
     validation_metrics: EpochMetrics,
     dataset_path: Path,
     seed: int,
+    initialized_from: Path | None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -126,9 +128,62 @@ def save_checkpoint(
             "validation_nontrivial_accuracy": validation_metrics.nontrivial_accuracy,
             "dataset_path": str(dataset_path),
             "seed": seed,
+            "initialized_from": (
+                str(initialized_from) if initialized_from is not None else None
+            ),
         },
         path,
     )
+
+
+def load_initial_weights(
+    *,
+    model: CardPlayPolicyNetwork,
+    checkpoint_path: Path,
+    device: torch.device,
+) -> None:
+    """Warm-start a policy from a compatible behavioral-cloning checkpoint."""
+    checkpoint: Any = torch.load(
+        checkpoint_path,
+        map_location=device,
+        weights_only=True,
+    )
+    if not isinstance(checkpoint, dict):
+        raise ValueError("Initial checkpoint must be a dictionary.")
+
+    input_size = int(checkpoint.get("input_size", OBSERVATION_FEATURE_SIZE))
+    action_count = int(checkpoint.get("action_count", ACTION_COUNT))
+    raw_hidden_sizes = checkpoint.get("hidden_sizes", model.hidden_sizes)
+
+    if (
+        not isinstance(raw_hidden_sizes, (tuple, list))
+        or len(raw_hidden_sizes) != 2
+    ):
+        raise ValueError("Initial checkpoint hidden_sizes must contain two values.")
+
+    hidden_sizes = (int(raw_hidden_sizes[0]), int(raw_hidden_sizes[1]))
+
+    if input_size != model.input_size:
+        raise ValueError(
+            "Initial checkpoint observation size does not match the model: "
+            f"{input_size} != {model.input_size}."
+        )
+    if action_count != model.action_count:
+        raise ValueError(
+            "Initial checkpoint action count does not match the model: "
+            f"{action_count} != {model.action_count}."
+        )
+    if hidden_sizes != model.hidden_sizes:
+        raise ValueError(
+            "Initial checkpoint hidden sizes do not match the model: "
+            f"{hidden_sizes} != {model.hidden_sizes}."
+        )
+
+    state_dict = checkpoint.get("model_state_dict")
+    if not isinstance(state_dict, dict):
+        raise ValueError("Initial checkpoint does not contain model_state_dict.")
+
+    model.load_state_dict(state_dict)
 
 
 def train(
@@ -143,6 +198,7 @@ def train(
     seed: int,
     device_name: str,
     hidden_sizes: tuple[int, int],
+    init_checkpoint: Path | None = None,
 ) -> None:
     if epochs <= 0:
         raise ValueError("epochs must be greater than zero.")
@@ -187,6 +243,14 @@ def train(
         hidden_sizes=hidden_sizes,
         action_count=ACTION_COUNT,
     ).to(device)
+
+    if init_checkpoint is not None:
+        load_initial_weights(
+            model=model,
+            checkpoint_path=init_checkpoint,
+            device=device,
+        )
+
     optimizer = AdamW(
         model.parameters(),
         lr=learning_rate,
@@ -196,7 +260,7 @@ def train(
     best_nontrivial_accuracy = -1.0
     start = time.perf_counter()
 
-    print("Behavioral-cloning training")
+    print("Behavioral-cloning / DAgger training")
     print("=" * 88)
     print(f"Dataset:                   {dataset_path}")
     print(f"Examples:                  {arrays.example_count:,}")
@@ -206,6 +270,10 @@ def train(
     print(f"Hidden sizes:              {hidden_sizes}")
     print(f"Batch size:                {batch_size}")
     print(f"Learning rate:             {learning_rate:g}")
+    print(
+        "Initialized from:           "
+        f"{init_checkpoint if init_checkpoint is not None else 'random weights'}"
+    )
     print()
 
     for epoch in range(1, epochs + 1):
@@ -243,6 +311,7 @@ def train(
                 validation_metrics=validation_metrics,
                 dataset_path=dataset_path,
                 seed=seed,
+                initialized_from=init_checkpoint,
             )
             print(f"  saved new best checkpoint -> {output}")
 
@@ -254,7 +323,10 @@ def train(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Train an MLP to imitate HeuristicAgent card-play decisions."
+        description=(
+            "Train an MLP on heuristic demonstrations or an aggregated DAgger "
+            "dataset."
+        )
     )
     parser.add_argument(
         "--dataset",
@@ -265,6 +337,12 @@ def parse_args() -> argparse.Namespace:
         "--output",
         type=Path,
         default=Path("models/behavior_cloning/card_play_mlp.pt"),
+    )
+    parser.add_argument(
+        "--init-checkpoint",
+        type=Path,
+        default=None,
+        help="Optional compatible checkpoint used to warm-start training.",
     )
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--batch-size", type=int, default=256)
@@ -295,6 +373,7 @@ def main() -> None:
         seed=args.seed,
         device_name=args.device,
         hidden_sizes=(args.hidden_1, args.hidden_2),
+        init_checkpoint=args.init_checkpoint,
     )
 
 
