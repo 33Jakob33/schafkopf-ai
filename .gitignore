@@ -12,3 +12,6 @@ wheels/
 # IDEs
 .vscode
 
+# Generated ML artifacts
+data/behavior_cloning/
+models/behavior_cloning/
