@@ -210,7 +210,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--checkpoint",
         type=Path,
-        default=Path("models/ppo/card_play_ppo_best.pt"),
+        default=Path("models/ppo/card_play_ppo.pt"),
     )
     parser.add_argument("--games", type=int, default=10_000)
     parser.add_argument("--seed", type=int, default=42)
