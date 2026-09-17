@@ -23,12 +23,24 @@ from .card_play_encoding import (
 )
 from .dagger import DAggerRecordingAgent, aggregate_dagger_arrays
 from .demonstrations import BehaviorCloningCollector, RecordingHeuristicAgent
+from .ppo import (
+    ActorCriticCardPlayNetwork,
+    PPOBatch,
+    PPORolloutBuffer,
+    PPOStep,
+    PPOUpdateMetrics,
+    initialize_from_behavior_checkpoint,
+    load_ppo_model,
+    ppo_update,
+    save_ppo_checkpoint,
+)
 
 __all__ = [
     "ACTION_COUNT",
     "CARD_COUNT",
     "OBSERVATION_FEATURE_SIZE",
     "ActionMask",
+    "ActorCriticCardPlayNetwork",
     "BehaviorCloningArrays",
     "BehaviorCloningCollector",
     "BehaviorCloningDataset",
@@ -36,16 +48,24 @@ __all__ = [
     "DAggerRecordingAgent",
     "EncodedCardPlayObservation",
     "FeatureVector",
+    "PPOBatch",
+    "PPORolloutBuffer",
+    "PPOStep",
+    "PPOUpdateMetrics",
     "RecordingHeuristicAgent",
     "action_index_to_card",
     "aggregate_dagger_arrays",
     "card_to_action_index",
     "encode_card_play",
     "encode_player_observation",
+    "initialize_from_behavior_checkpoint",
     "legal_action_mask",
     "load_behavior_cloning_arrays",
+    "load_ppo_model",
     "mask_illegal_logits",
+    "ppo_update",
     "relative_player_index",
     "save_behavior_cloning_arrays",
+    "save_ppo_checkpoint",
     "split_indices_by_game",
 ]
