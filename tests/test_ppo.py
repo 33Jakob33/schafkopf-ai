@@ -18,7 +18,9 @@ from schafkopf_ai.training.ppo import (
     PPORolloutBuffer,
     PPOStep,
     initialize_from_behavior_checkpoint,
+    initialize_from_checkpoint,
     ppo_update,
+    save_ppo_checkpoint,
 )
 
 
@@ -74,6 +76,39 @@ def test_behavior_checkpoint_initializes_identical_policy_logits(
 
     assert torch.allclose(behavior_logits, ppo_logits)
     assert torch.count_nonzero(ppo_values) == 0
+
+
+def test_existing_ppo_checkpoint_restores_full_actor_critic(
+    tmp_path: Path,
+) -> None:
+    torch.manual_seed(11)
+    source = ActorCriticCardPlayNetwork()
+    checkpoint = tmp_path / "ppo.pt"
+    save_ppo_checkpoint(
+        path=checkpoint,
+        model=source,
+        iteration=12,
+        mean_payment=3.5,
+        validation_delta=-1.25,
+        seed=42,
+        initialized_from="dagger.pt",
+    )
+
+    torch.manual_seed(99)
+    restored = ActorCriticCardPlayNetwork()
+    source_kind = initialize_from_checkpoint(
+        model=restored,
+        checkpoint_path=checkpoint,
+        device=torch.device("cpu"),
+    )
+
+    assert source_kind == "PPO"
+    for source_tensor, restored_tensor in zip(
+        source.state_dict().values(),
+        restored.state_dict().values(),
+        strict=True,
+    ):
+        assert torch.equal(source_tensor, restored_tensor)
 
 
 def test_ppo_agent_never_selects_illegal_card() -> None:
