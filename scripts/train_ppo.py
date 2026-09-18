@@ -16,7 +16,6 @@ from schafkopf_ai.agents.agent import Agent
 from schafkopf_ai.agents.heuristic_agent import HeuristicAgent
 from schafkopf_ai.agents.ppo_card_play_agent import PPOCardPlayAgent
 from schafkopf_ai.agents.random_agent import RandomAgent
-from schafkopf_ai.game.game_type import GameType
 from schafkopf_ai.game.rules import RAMSCH_RULES
 from schafkopf_ai.runner.round_runner import RoundResult, RoundRunner
 from schafkopf_ai.training.card_play_encoding import (
