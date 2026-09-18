@@ -131,6 +131,38 @@ class PPORolloutBuffer:
         )
 
 
+def _validate_checkpoint_shape(
+    *,
+    checkpoint: dict[str, Any],
+    model: ActorCriticCardPlayNetwork,
+    source_name: str,
+) -> None:
+    input_size = int(checkpoint.get("input_size", OBSERVATION_FEATURE_SIZE))
+    action_count = int(checkpoint.get("action_count", ACTION_COUNT))
+    raw_hidden_sizes = checkpoint.get("hidden_sizes", model.hidden_sizes)
+
+    if not isinstance(raw_hidden_sizes, (tuple, list)) or len(raw_hidden_sizes) != 2:
+        raise ValueError(f"{source_name} hidden_sizes must contain two values.")
+
+    hidden_sizes = (int(raw_hidden_sizes[0]), int(raw_hidden_sizes[1]))
+
+    if input_size != model.input_size:
+        raise ValueError(
+            f"{source_name} observation size does not match PPO model: "
+            f"{input_size} != {model.input_size}."
+        )
+    if action_count != model.action_count:
+        raise ValueError(
+            f"{source_name} action count does not match PPO model: "
+            f"{action_count} != {model.action_count}."
+        )
+    if hidden_sizes != model.hidden_sizes:
+        raise ValueError(
+            f"{source_name} hidden sizes do not match PPO model: "
+            f"{hidden_sizes} != {model.hidden_sizes}."
+        )
+
+
 def initialize_from_behavior_checkpoint(
     *,
     model: ActorCriticCardPlayNetwork,
@@ -146,29 +178,11 @@ def initialize_from_behavior_checkpoint(
     if not isinstance(checkpoint, dict):
         raise TypeError("Behavior checkpoint must be a dictionary.")
 
-    input_size = int(checkpoint.get("input_size", OBSERVATION_FEATURE_SIZE))
-    action_count = int(checkpoint.get("action_count", ACTION_COUNT))
-    raw_hidden_sizes = checkpoint.get("hidden_sizes", model.hidden_sizes)
-
-    if not isinstance(raw_hidden_sizes, (tuple, list)) or len(raw_hidden_sizes) != 2:
-        raise ValueError("Behavior checkpoint hidden_sizes must contain two values.")
-
-    hidden_sizes = (int(raw_hidden_sizes[0]), int(raw_hidden_sizes[1]))
-    if input_size != model.input_size:
-        raise ValueError(
-            "Behavior checkpoint observation size does not match PPO model: "
-            f"{input_size} != {model.input_size}."
-        )
-    if action_count != model.action_count:
-        raise ValueError(
-            "Behavior checkpoint action count does not match PPO model: "
-            f"{action_count} != {model.action_count}."
-        )
-    if hidden_sizes != model.hidden_sizes:
-        raise ValueError(
-            "Behavior checkpoint hidden sizes do not match PPO model: "
-            f"{hidden_sizes} != {model.hidden_sizes}."
-        )
+    _validate_checkpoint_shape(
+        checkpoint=checkpoint,
+        model=model,
+        source_name="Behavior checkpoint",
+    )
 
     source = checkpoint.get("model_state_dict")
     if not isinstance(source, dict):
@@ -202,6 +216,45 @@ def initialize_from_behavior_checkpoint(
     model.load_state_dict(destination)
 
 
+def initialize_from_checkpoint(
+    *,
+    model: ActorCriticCardPlayNetwork,
+    checkpoint_path: str | Path,
+    device: torch.device,
+) -> str:
+    """
+    Initialize PPO from either a BC/DAgger checkpoint or an existing PPO model.
+
+    Returns a short source label for logging.
+    """
+    checkpoint: Any = torch.load(
+        Path(checkpoint_path),
+        map_location=device,
+        weights_only=True,
+    )
+    if not isinstance(checkpoint, dict):
+        raise TypeError("Initial checkpoint must be a dictionary.")
+
+    if checkpoint.get("format") == "ppo_actor_critic_v1":
+        _validate_checkpoint_shape(
+            checkpoint=checkpoint,
+            model=model,
+            source_name="PPO checkpoint",
+        )
+        state_dict = checkpoint.get("model_state_dict")
+        if not isinstance(state_dict, dict):
+            raise TypeError("PPO checkpoint does not contain model_state_dict.")
+        model.load_state_dict(state_dict)
+        return "PPO"
+
+    initialize_from_behavior_checkpoint(
+        model=model,
+        checkpoint_path=checkpoint_path,
+        device=device,
+    )
+    return "BC/DAgger"
+
+
 def save_ppo_checkpoint(
     *,
     path: str | Path,
@@ -210,6 +263,7 @@ def save_ppo_checkpoint(
     mean_payment: float,
     seed: int,
     initialized_from: str | Path | None,
+    validation_delta: float | None = None,
 ) -> None:
     checkpoint_path = Path(path)
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
@@ -223,6 +277,7 @@ def save_ppo_checkpoint(
             "action_count": model.action_count,
             "iteration": iteration,
             "mean_payment": mean_payment,
+            "validation_delta": validation_delta,
             "seed": seed,
             "initialized_from": (
                 str(initialized_from) if initialized_from is not None else None
