@@ -4,6 +4,10 @@ import pytest
 
 from schafkopf_ai.agents.agent import Agent
 from schafkopf_ai.agents.random_agent import RandomAgent
+from schafkopf_ai.game.bidding import (
+    BiddingAction,
+    BiddingObservation,
+)
 from schafkopf_ai.game.card import Card, Rank, Suit
 from schafkopf_ai.game.deck import Deck
 from schafkopf_ai.game.game_contract import GameContract
@@ -27,12 +31,7 @@ def create_state() -> GameState:
 
 
 def create_random_agents() -> tuple[RandomAgent, ...]:
-    return tuple(
-        RandomAgent(
-            rng=random.Random(seed)
-        )
-        for seed in range(4)
-    )
+    return tuple(RandomAgent(rng=random.Random(seed)) for seed in range(4))
 
 
 def test_runner_requires_four_agents() -> None:
@@ -71,17 +70,11 @@ def test_play_turn_plays_exactly_one_card() -> None:
         agents=create_random_agents(),
     )
 
-    total_cards_before = sum(
-        len(player)
-        for player in state.players
-    )
+    total_cards_before = sum(len(player) for player in state.players)
 
     runner.play_turn()
 
-    total_cards_after = sum(
-        len(player)
-        for player in state.players
-    )
+    total_cards_after = sum(len(player) for player in state.players)
 
     assert total_cards_before == 32
     assert total_cards_after == 31
@@ -145,10 +138,7 @@ def test_all_players_have_empty_hands_after_game() -> None:
 
     result = runner.run()
 
-    assert all(
-        len(player) == 0
-        for player in result.players
-    )
+    assert all(len(player) == 0 for player in result.players)
 
 
 def test_all_32_cards_are_present_in_completed_tricks() -> None:
@@ -160,9 +150,7 @@ def test_all_32_cards_are_present_in_completed_tricks() -> None:
     result = runner.run()
 
     played_cards = [
-        play.card
-        for trick in result.completed_tricks
-        for play in trick.plays
+        play.card for trick in result.completed_tricks for play in trick.plays
     ]
 
     assert len(played_cards) == 32
@@ -183,11 +171,19 @@ def test_cannot_play_turn_after_game_complete() -> None:
     ):
         runner.play_turn()
 
+
 class InvalidCardAgent(Agent):
-    """
-    Deliberately returns a card that is not among its legal moves
-    whenever possible.
-    """
+    def choose_bidding_action(
+        self,
+        observation: BiddingObservation,
+        legal_actions: tuple[BiddingAction, ...],
+    ) -> BiddingAction:
+        del observation
+
+        if not legal_actions:
+            raise ValueError("No legal bidding actions available.")
+
+        return legal_actions[0]
 
     def choose_card(
         self,
@@ -203,9 +199,7 @@ class InvalidCardAgent(Agent):
                 if card not in legal_cards:
                     return card
 
-        raise RuntimeError(
-            "Could not find an illegal card."
-        )
+        raise RuntimeError("Could not find an illegal card.")
 
 
 def test_runner_rejects_agent_illegal_choice() -> None:

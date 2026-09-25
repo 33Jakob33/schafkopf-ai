@@ -6,7 +6,6 @@ from .game_contract import GameContract
 from .game_type import GameType
 from .trump import is_trump, trump_strength
 
-
 STANDARD_PLAIN_RANK_ORDER: tuple[Rank, ...] = (
     Rank.ACE,
     Rank.TEN,

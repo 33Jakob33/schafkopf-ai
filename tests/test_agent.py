@@ -1,6 +1,7 @@
 import pytest
 
 from schafkopf_ai.agents.agent import Agent
+from schafkopf_ai.game.bidding import BiddingAction, BiddingObservation
 from schafkopf_ai.game.card import Card, Rank, Suit
 from schafkopf_ai.game.game_contract import GameContract
 from schafkopf_ai.game.game_type import GameType
@@ -16,16 +17,15 @@ def test_dummy_agent_rejects_empty_legal_actions() -> None:
     observation = PlayerObservation(
         player_index=0,
         hand=(card,),
-        contract=GameContract(
-            GameType.WENZ
-        ),
+        contract=GameContract(GameType.WENZ),
         current_player=0,
         current_trick=(),
         completed_tricks=(),
+        points_by_player=(0, 0, 0, 0),
         called_ace_released=False,
     )
 
-    agent = DummyAgent()
+    agent = DummyAgent()  # type: ignore[abstract]
 
     with pytest.raises(
         ValueError,
@@ -36,6 +36,7 @@ def test_dummy_agent_rejects_empty_legal_actions() -> None:
             legal_cards=(),
         )
 
+
 def test_concrete_agent_can_choose_card() -> None:
     card = Card(
         Suit.EICHEL,
@@ -45,16 +46,15 @@ def test_concrete_agent_can_choose_card() -> None:
     observation = PlayerObservation(
         player_index=0,
         hand=(card,),
-        contract=GameContract(
-            GameType.WENZ
-        ),
+        contract=GameContract(GameType.WENZ),
         current_player=0,
         current_trick=(),
         completed_tricks=(),
+        points_by_player=(0, 0, 0, 0),
         called_ace_released=False,
     )
 
-    agent = DummyAgent()
+    agent = DummyAgent()  # type: ignore[abstract]
 
     chosen = agent.choose_card(
         observation=observation,
@@ -63,9 +63,10 @@ def test_concrete_agent_can_choose_card() -> None:
 
     assert chosen == card
 
+
 def test_agent_cannot_be_instantiated_directly() -> None:
     with pytest.raises(TypeError):
-        Agent() # type: ignore
+        Agent()  # type: ignore
 
 
 class IncompleteAgent(Agent):
@@ -78,6 +79,18 @@ def test_agent_without_choose_card_cannot_be_instantiated() -> None:
 
 
 class DummyAgent(Agent):
+    def choose_bidding_action(
+        self,
+        observation: BiddingObservation,
+        legal_actions: tuple[BiddingAction, ...],
+    ) -> BiddingAction:
+        del observation
+
+        if not legal_actions:
+            raise ValueError("No legal bidding actions.")
+
+        return legal_actions[0]
+
     def choose_card(
         self,
         observation: PlayerObservation,
@@ -89,5 +102,3 @@ class DummyAgent(Agent):
             raise ValueError("No legal cards available.")
 
         return legal_cards[0]
-
-    

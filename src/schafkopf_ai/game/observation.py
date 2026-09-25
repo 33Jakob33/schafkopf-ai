@@ -23,6 +23,7 @@ class PlayerObservation:
 
     current_trick: tuple[TrickPlay, ...]
     completed_tricks: tuple[tuple[TrickPlay, ...], ...]
+    points_by_player: tuple[int, int, int, int]
 
     called_ace_released: bool
 

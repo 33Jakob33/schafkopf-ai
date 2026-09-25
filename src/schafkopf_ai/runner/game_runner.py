@@ -23,8 +23,7 @@ class GameRunner:
     ) -> None:
         if len(agents) != self.PLAYER_COUNT:
             raise ValueError(
-                f"A GameRunner requires exactly "
-                f"{self.PLAYER_COUNT} agents."
+                f"A GameRunner requires exactly {self.PLAYER_COUNT} agents."
             )
 
         self.state = state
@@ -44,29 +43,19 @@ class GameRunner:
                 a card that is not one of the legal actions.
         """
         if self.state.is_complete:
-            raise ValueError(
-                "Cannot play another turn: the game is complete."
-            )
+            raise ValueError("Cannot play another turn: the game is complete.")
 
         player_index = self.state.current_player
 
         if player_index is None:
-            raise RuntimeError(
-                "Game is not complete but has no current player."
-            )
+            raise RuntimeError("Game is not complete but has no current player.")
 
-        observation = self.state.observation_for(
-            player_index
-        )
+        observation = self.state.observation_for(player_index)
 
-        legal_cards = self.state.legal_moves(
-            player_index
-        )
+        legal_cards = self.state.legal_moves(player_index)
 
         if not legal_cards:
-            raise RuntimeError(
-                f"Player {player_index} has no legal moves."
-            )
+            raise RuntimeError(f"Player {player_index} has no legal moves.")
 
         agent = self.agents[player_index]
 
@@ -77,8 +66,7 @@ class GameRunner:
 
         if chosen_card not in legal_cards:
             raise ValueError(
-                f"Agent for player {player_index} selected "
-                f"illegal card {chosen_card}."
+                f"Agent for player {player_index} selected illegal card {chosen_card}."
             )
 
         self.state.play_card(
@@ -99,9 +87,7 @@ class GameRunner:
         """
         while not self.state.is_complete:
             if self.turns_played >= self.CARDS_PER_GAME:
-                raise RuntimeError(
-                    "Game exceeded 32 turns without completing."
-                )
+                raise RuntimeError("Game exceeded 32 turns without completing.")
 
             self.play_turn()
 

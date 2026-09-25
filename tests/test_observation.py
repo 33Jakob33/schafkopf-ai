@@ -43,6 +43,19 @@ def test_observation_does_not_expose_players() -> None:
     assert not hasattr(observation, "players")
 
 
+def test_initial_observation_has_zero_points() -> None:
+    state = create_state()
+
+    observation = state.observation_for(0)
+
+    assert observation.points_by_player == (
+        0,
+        0,
+        0,
+        0,
+    )
+
+
 def test_observation_does_not_expose_other_hands() -> None:
     state = create_state()
 
@@ -101,6 +114,25 @@ def test_played_card_appears_in_current_trick() -> None:
     assert observation.current_trick[0].player == player_index
 
 
+def test_observation_contains_current_points() -> None:
+    state = create_state()
+
+    for _ in range(4):
+        player = state.current_player
+
+        assert player is not None
+
+        state.play_card(
+            player,
+            state.legal_moves(player)[0],
+        )
+
+    observation = state.observation_for(0)
+
+    assert observation.points_by_player == state.player_points
+    assert sum(observation.points_by_player) > 0
+
+
 def test_played_card_is_removed_from_own_hand() -> None:
     state = create_state()
 
@@ -119,6 +151,24 @@ def test_played_card_is_removed_from_own_hand() -> None:
 
     assert card not in observation.hand
     assert len(observation.hand) == 7
+
+
+def test_completed_observation_contains_120_points() -> None:
+    state = create_state()
+
+    while not state.is_complete:
+        player = state.current_player
+
+        assert player is not None
+
+        state.play_card(
+            player,
+            state.legal_moves(player)[0],
+        )
+
+    observation = state.observation_for(0)
+
+    assert sum(observation.points_by_player) == 120
 
 
 def test_completed_trick_appears_in_observation() -> None:

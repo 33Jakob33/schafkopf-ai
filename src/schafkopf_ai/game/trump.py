@@ -4,7 +4,6 @@ from .card import Card, Rank, Suit
 from .game_contract import GameContract
 from .game_type import GameType
 
-
 # Suit order for Ober and Unter:
 #
 # strongest → weakest

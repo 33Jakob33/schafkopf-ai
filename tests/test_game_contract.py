@@ -23,15 +23,6 @@ def test_solo_accepts_trump_suit() -> None:
     assert contract.trump_suit is Suit.EICHEL
 
 
-@pytest.mark.parametrize(
-    "game_type",
-    [
-        GameType.SAUSPIEL,
-        GameType.WENZ,
-        GameType.GEIER,
-        GameType.RAMSCH,
-    ],
-)
 def test_sauspiel_requires_called_suit() -> None:
     with pytest.raises(
         ValueError,
@@ -60,6 +51,15 @@ def test_sauspiel_cannot_call_herz() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "game_type",
+    [
+        GameType.SAUSPIEL,
+        GameType.WENZ,
+        GameType.GEIER,
+        GameType.RAMSCH,
+    ],
+)
 def test_non_solo_rejects_trump_suit(
     game_type: GameType,
 ) -> None:
@@ -90,6 +90,14 @@ def test_simple_contract_requires_no_suit(
     assert contract.called_suit is None
 
 
+@pytest.mark.parametrize(
+    "game_type",
+    [
+        GameType.WENZ,
+        GameType.GEIER,
+        GameType.RAMSCH,
+    ],
+)
 def test_non_solo_contract_does_not_require_trump_suit(
     game_type: GameType,
 ) -> None:
