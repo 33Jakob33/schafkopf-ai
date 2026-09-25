@@ -379,5 +379,3 @@ Next experiments:
 - mypy
 
 ---
-
-This is a personal portfolio and experimentation project focused on combining a rules-heavy game engine with reproducible machine-learning experiments.
