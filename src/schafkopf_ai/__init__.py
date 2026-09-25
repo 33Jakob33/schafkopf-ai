@@ -1,2 +1,5 @@
 def main() -> None:
-    print("Hello from schafkopf-ai!")
+    print(
+        "Schafkopf AI: game engine and AI training toolkit. "
+        "See README.md for simulation, training, and evaluation commands."
+    )
