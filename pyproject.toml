@@ -1,16 +1,26 @@
 [project]
 name = "schafkopf-ai"
 version = "0.1.0"
-description = "Add your description here"
+description = "A typed Schafkopf engine and game-AI research project using heuristics, imitation learning, DAgger, and PPO."
 readme = "README.md"
 authors = [
-    { name = "jakob schleicher", email = "jakob.schleicher@web.de" }
+    { name = "Jakob Schleicher", email = "jakob.schleicher@web.de" }
 ]
 requires-python = ">=3.12"
+keywords = [
+    "reinforcement-learning",
+    "pytorch",
+    "game-ai",
+    "imitation-learning",
+    "schafkopf",
+]
 dependencies = [
     "numpy>=2.0",
     "torch>=2.7",
 ]
+
+[project.urls]
+Repository = "https://github.com/33Jakob33/schafkopf-ai"
 
 [project.scripts]
 schafkopf-ai = "schafkopf_ai:main"
