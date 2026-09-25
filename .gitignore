@@ -4,13 +4,20 @@ __pycache__/
 build/
 dist/
 wheels/
-*.egg-info
+*.egg-info/
 
 # Virtual environments
-.venv
+.venv/
+
+# Tooling and test caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
 # IDEs
-.vscode
+.vscode/
 
 # Generated ML artifacts
 data/behavior_cloning/
