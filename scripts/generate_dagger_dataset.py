@@ -59,10 +59,10 @@ def run_generation(
         device=device,
     )
     base_version = infer_observation_version(int(base_arrays.features.shape[1]))
-    if policy_agent.model.observation_version != base_version:
+    if policy_agent.observation_version != base_version:
         raise ValueError(
             "DAgger base dataset and learner checkpoint use different observation "
-            f"versions: {base_version} != {policy_agent.model.observation_version}."
+            f"versions: {base_version} != {policy_agent.observation_version}."
         )
     collector = BehaviorCloningCollector(
         games * CARD_PLAYS_PER_FOCAL_GAME,
