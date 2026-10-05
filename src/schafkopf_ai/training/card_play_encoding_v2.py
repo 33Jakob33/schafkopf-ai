@@ -8,17 +8,14 @@ from schafkopf_ai.game.trick import TrickPlay, winning_play
 from schafkopf_ai.game.trump import is_trump, trump_order
 
 from .card_play_encoding import (
-    ACTION_COUNT,
     CARD_COUNT,
     GAME_TYPE_ORDER,
     MAX_TRICKS,
     OPTIONAL_PLAYER_FEATURE_SIZE,
     OPTIONAL_SUIT_FEATURE_SIZE,
     PLAYER_COUNT,
-    PLAYS_PER_TRICK,
     RANK_ORDER,
     SUIT_ORDER,
-    ActionMask,
     EncodedCardPlayObservation,
     FeatureVector,
     card_to_action_index,
@@ -26,8 +23,10 @@ from .card_play_encoding import (
     relative_player_index,
 )
 
-CURRENT_TRICK_PLAY_FEATURE_SIZE = CARD_COUNT + PLAYER_COUNT + 1
-CURRENT_TRICK_FEATURE_SIZE = PLAYS_PER_TRICK * CURRENT_TRICK_PLAY_FEATURE_SIZE
+MAX_CURRENT_TRICK_PLAYS = 3
+MAX_TRUMP_COUNT = 14
+CURRENT_TRICK_PLAY_FEATURE_SIZE = CARD_COUNT + PLAYER_COUNT
+CURRENT_TRICK_FEATURE_SIZE = MAX_CURRENT_TRICK_PLAYS * CURRENT_TRICK_PLAY_FEATURE_SIZE
 KNOWN_VOID_CATEGORY_COUNT = 1 + len(SUIT_ORDER)  # trump + four plain suits
 
 # V2 deliberately replaces the 1,184-feature raw trick history with compact,
@@ -47,7 +46,7 @@ OBSERVATION_V2_FEATURE_SIZE = (
     + 1  # team information known
     + PLAYER_COUNT  # observer-team membership by relative player
     + 2  # observer team / opposing team points
-    + CARD_COUNT  # unseen trump-card mask
+    + MAX_TRUMP_COUNT  # unseen trumps in contract strength order
     + 1  # unseen trump count
     + len(SUIT_ORDER)  # unseen plain-card count per suit
     + len(SUIT_ORDER)  # unseen plain-card points per suit
@@ -146,6 +145,9 @@ def _card_mask(cards: tuple[Card, ...]) -> list[float]:
 def _encode_current_trick(observation: PlayerObservation) -> list[float]:
     encoded = [0.0] * CURRENT_TRICK_FEATURE_SIZE
 
+    if len(observation.current_trick) > MAX_CURRENT_TRICK_PLAYS:
+        raise ValueError("A card-play decision cannot observe four cards in a trick.")
+
     for play_index, play in enumerate(observation.current_trick):
         base = play_index * CURRENT_TRICK_PLAY_FEATURE_SIZE
         encoded[base + card_to_action_index(play.card)] = 1.0
@@ -155,7 +157,6 @@ def _encode_current_trick(observation: PlayerObservation) -> list[float]:
             observation.player_index,
         )
         encoded[base + CARD_COUNT + relative_player] = 1.0
-        encoded[base + CARD_COUNT + PLAYER_COUNT] = 1.0
 
     return encoded
 
@@ -272,11 +273,11 @@ def _encode_unseen_trumps(
     unseen_cards: tuple[Card, ...],
 ) -> list[float]:
     unseen = set(unseen_cards)
-    mask = [0.0] * CARD_COUNT
+    mask = [0.0] * MAX_TRUMP_COUNT
 
-    for trump in trump_order(observation.contract):
+    for trump_index, trump in enumerate(trump_order(observation.contract)):
         if trump in unseen:
-            mask[card_to_action_index(trump)] = 1.0
+            mask[trump_index] = 1.0
 
     return mask
 
