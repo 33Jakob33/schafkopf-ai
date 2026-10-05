@@ -12,6 +12,10 @@ from torch.optim import Optimizer
 
 from .behavior_cloning import mask_illegal_logits
 from .card_play_encoding import ACTION_COUNT, OBSERVATION_FEATURE_SIZE
+from .observation_encoding import (
+    infer_observation_version,
+    resolve_checkpoint_observation_version,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +65,7 @@ class ActorCriticCardPlayNetwork(nn.Module):
         self.input_size = input_size
         self.hidden_sizes = hidden_sizes
         self.action_count = action_count
+        self.observation_version = infer_observation_version(input_size)
 
         self.shared = nn.Sequential(
             nn.Linear(input_size, first_hidden),
@@ -137,7 +142,11 @@ def _validate_checkpoint_shape(
     model: ActorCriticCardPlayNetwork,
     source_name: str,
 ) -> None:
-    input_size = int(checkpoint.get("input_size", OBSERVATION_FEATURE_SIZE))
+    input_size = int(checkpoint.get("input_size", model.input_size))
+    observation_version = resolve_checkpoint_observation_version(
+        input_size=input_size,
+        explicit_version=checkpoint.get("observation_version"),
+    )
     action_count = int(checkpoint.get("action_count", ACTION_COUNT))
     raw_hidden_sizes = checkpoint.get("hidden_sizes", model.hidden_sizes)
 
@@ -150,6 +159,11 @@ def _validate_checkpoint_shape(
         raise ValueError(
             f"{source_name} observation size does not match PPO model: "
             f"{input_size} != {model.input_size}."
+        )
+    if observation_version != model.observation_version:
+        raise ValueError(
+            f"{source_name} observation version does not match PPO model: "
+            f"{observation_version} != {model.observation_version}."
         )
     if action_count != model.action_count:
         raise ValueError(
@@ -216,6 +230,28 @@ def initialize_from_behavior_checkpoint(
     model.load_state_dict(destination)
 
 
+def checkpoint_observation_spec(
+    checkpoint_path: str | Path,
+    *,
+    device: str | torch.device = "cpu",
+) -> tuple[int, str]:
+    """Return input size and observation version for a BC/DAgger or PPO checkpoint."""
+    checkpoint: Any = torch.load(
+        Path(checkpoint_path),
+        map_location=torch.device(device),
+        weights_only=True,
+    )
+    if not isinstance(checkpoint, dict):
+        raise TypeError("Initial checkpoint must be a dictionary.")
+
+    input_size = int(checkpoint.get("input_size", OBSERVATION_FEATURE_SIZE))
+    version = resolve_checkpoint_observation_version(
+        input_size=input_size,
+        explicit_version=checkpoint.get("observation_version"),
+    )
+    return input_size, version
+
+
 def initialize_from_checkpoint(
     *,
     model: ActorCriticCardPlayNetwork,
@@ -275,6 +311,7 @@ def save_ppo_checkpoint(
             "input_size": model.input_size,
             "hidden_sizes": model.hidden_sizes,
             "action_count": model.action_count,
+            "observation_version": model.observation_version,
             "iteration": iteration,
             "mean_payment": mean_payment,
             "validation_delta": validation_delta,
@@ -304,6 +341,10 @@ def load_ppo_model(
         raise ValueError("Checkpoint is not a supported PPO actor-critic checkpoint.")
 
     input_size = int(checkpoint.get("input_size", OBSERVATION_FEATURE_SIZE))
+    observation_version = resolve_checkpoint_observation_version(
+        input_size=input_size,
+        explicit_version=checkpoint.get("observation_version"),
+    )
     action_count = int(checkpoint.get("action_count", ACTION_COUNT))
     raw_hidden_sizes = checkpoint.get("hidden_sizes", (512, 256))
     if not isinstance(raw_hidden_sizes, (tuple, list)) or len(raw_hidden_sizes) != 2:
@@ -314,6 +355,8 @@ def load_ppo_model(
         hidden_sizes=(int(raw_hidden_sizes[0]), int(raw_hidden_sizes[1])),
         action_count=action_count,
     ).to(resolved_device)
+    if model.observation_version != observation_version:
+        raise RuntimeError("PPO checkpoint observation version could not be restored.")
 
     state_dict = checkpoint.get("model_state_dict")
     if not isinstance(state_dict, dict):
