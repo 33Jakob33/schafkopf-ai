@@ -233,19 +233,33 @@ Generated datasets and model checkpoints are not committed to the repository.
 
 ## Observation encoding
 
-The current card-play model uses a flat observation vector containing information such as:
+Two card-play encodings are currently available.
 
-- the player's hand,
-- public trick history,
-- game type,
-- trump or called suit,
-- declarer,
-- relative player information,
-- collected points,
-- called-Ace release state,
-- current trick number.
+**V1** is the original 1,254-feature representation. It contains the player's hand and a sparse slot-by-slot encoding of the complete public trick history.
 
-This is still an experimental representation. One of the next planned changes is to add more explicit public game-state information, such as known voids, current trick strength, trump counts, role information, and bidding history.
+**V2** is a compact 222-feature representation. Instead of keeping completed tricks as raw history, it summarizes the information that is relevant for later decisions:
+
+- the player's full hand,
+- the current trick and current winning player,
+- points collected by each player,
+- team points when the teams are publicly known,
+- which trumps are still unseen,
+- unseen non-trump card counts and points by suit,
+- known void information for trump and each plain suit,
+- contract, declarer, called suit and trick progress.
+
+The compact encoder only uses the observer's private hand and information that is public or can be inferred from public play.
+
+Generate a V2 demonstration dataset with:
+
+```powershell
+uv run python scripts/generate_bc_dataset.py `
+  --games 2000 `
+  --observation-version v2 `
+  --output data/behavior_cloning/heuristic_card_play_v2.npz
+```
+
+Datasets and checkpoints keep their observation version, so V1 and V2 experiments can coexist.
 
 ## Testing and code quality
 
