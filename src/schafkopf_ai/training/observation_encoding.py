@@ -38,6 +38,14 @@ def feature_size_for_version(version: str) -> int:
     return OBSERVATION_V2_FEATURE_SIZE
 
 
+def try_infer_observation_version(input_size: int) -> ObservationVersion | None:
+    if input_size == OBSERVATION_FEATURE_SIZE:
+        return "v1"
+    if input_size == OBSERVATION_V2_FEATURE_SIZE:
+        return "v2"
+    return None
+
+
 def infer_observation_version(input_size: int) -> ObservationVersion:
     if input_size == OBSERVATION_FEATURE_SIZE:
         return "v1"
