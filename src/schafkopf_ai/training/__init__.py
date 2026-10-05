@@ -21,14 +21,28 @@ from .card_play_encoding import (
     legal_action_mask,
     relative_player_index,
 )
+from .card_play_encoding_v2 import (
+    OBSERVATION_V2_FEATURE_SIZE,
+    encode_card_play_v2,
+    encode_player_observation_v2,
+)
 from .dagger import DAggerRecordingAgent, aggregate_dagger_arrays
 from .demonstrations import BehaviorCloningCollector, RecordingHeuristicAgent
+from .observation_encoding import (
+    OBSERVATION_VERSIONS,
+    ObservationVersion,
+    encode_card_play_for_version,
+    encode_player_observation_for_version,
+    feature_size_for_version,
+    infer_observation_version,
+)
 from .ppo import (
     ActorCriticCardPlayNetwork,
     PPOBatch,
     PPORolloutBuffer,
     PPOStep,
     PPOUpdateMetrics,
+    checkpoint_observation_spec,
     initialize_from_behavior_checkpoint,
     initialize_from_checkpoint,
     load_ppo_model,
@@ -40,6 +54,8 @@ __all__ = [
     "ACTION_COUNT",
     "CARD_COUNT",
     "OBSERVATION_FEATURE_SIZE",
+    "OBSERVATION_V2_FEATURE_SIZE",
+    "OBSERVATION_VERSIONS",
     "ActionMask",
     "ActorCriticCardPlayNetwork",
     "BehaviorCloningArrays",
@@ -53,12 +69,20 @@ __all__ = [
     "PPORolloutBuffer",
     "PPOStep",
     "PPOUpdateMetrics",
+    "ObservationVersion",
     "RecordingHeuristicAgent",
     "action_index_to_card",
     "aggregate_dagger_arrays",
     "card_to_action_index",
     "encode_card_play",
+    "encode_card_play_for_version",
+    "encode_card_play_v2",
     "encode_player_observation",
+    "encode_player_observation_for_version",
+    "encode_player_observation_v2",
+    "checkpoint_observation_spec",
+    "feature_size_for_version",
+    "infer_observation_version",
     "initialize_from_behavior_checkpoint",
     "initialize_from_checkpoint",
     "legal_action_mask",
