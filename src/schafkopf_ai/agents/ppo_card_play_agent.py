@@ -96,9 +96,7 @@ class PPOCardPlayAgent(Agent):
                 action_tensor = masked_logits.argmax(dim=1)
 
             action_index = int(action_tensor.item())
-            log_probability = float(
-                distribution.log_prob(action_tensor).item()
-            )
+            log_probability = float(distribution.log_prob(action_tensor).item())
             value = float(values.item())
 
         chosen_card = action_index_to_card(action_index)
