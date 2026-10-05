@@ -295,11 +295,7 @@ def _sauspiel_state(*, running_away: bool = False) -> GameState:
             Card(Suit.EICHEL, Rank.NINE),
         )
         reserved = set(called_hand)
-        remaining = [
-            card
-            for card in Deck().cards
-            if card not in reserved
-        ]
+        remaining = [card for card in Deck().cards if card not in reserved]
         hands = (
             tuple(remaining[:8]),
             called_hand + tuple(remaining[8:12]),
