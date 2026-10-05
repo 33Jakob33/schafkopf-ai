@@ -7,23 +7,34 @@ from schafkopf_ai.game.card import Card
 from schafkopf_ai.game.observation import PlayerObservation
 
 from .behavior_cloning import BehaviorCloningArrays
-from .card_play_encoding import (
-    ACTION_COUNT,
-    OBSERVATION_FEATURE_SIZE,
-    card_to_action_index,
-    encode_card_play,
+from .card_play_encoding import ACTION_COUNT, card_to_action_index
+from .observation_encoding import (
+    ObservationVersion,
+    encode_card_play_for_version,
+    feature_size_for_version,
+    normalize_observation_version,
 )
 
 
 class BehaviorCloningCollector:
     """Preallocated collector for card-play demonstrations."""
 
-    def __init__(self, expected_examples: int) -> None:
+    def __init__(
+        self,
+        expected_examples: int,
+        *,
+        observation_version: str = "v1",
+    ) -> None:
         if expected_examples <= 0:
             raise ValueError("expected_examples must be greater than zero.")
 
+        self.observation_version: ObservationVersion = normalize_observation_version(
+            observation_version
+        )
+        feature_size = feature_size_for_version(self.observation_version)
+
         self.features = np.empty(
-            (expected_examples, OBSERVATION_FEATURE_SIZE),
+            (expected_examples, feature_size),
             dtype=np.float16,
         )
         self.legal_masks = np.empty(
@@ -59,7 +70,11 @@ class BehaviorCloningCollector:
         if chosen_card not in legal_cards:
             raise ValueError("Demonstration target must be one of the legal cards.")
 
-        encoded = encode_card_play(observation, legal_cards)
+        encoded = encode_card_play_for_version(
+            self.observation_version,
+            observation,
+            legal_cards,
+        )
         target = card_to_action_index(chosen_card)
 
         index = self._count
