@@ -259,7 +259,9 @@ class GameState:
             return None
 
         called_ace = Card(called_suit, Rank.ACE)
-        public_plays = [play for trick in self._completed_tricks for play in trick.plays]
+        public_plays = [
+            play for trick in self._completed_tricks for play in trick.plays
+        ]
         if self.current_trick is not None:
             public_plays.extend(self.current_trick.plays)
 
