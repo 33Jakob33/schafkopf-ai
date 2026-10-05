@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, cast
 
 from schafkopf_ai.game.card import Card
 from schafkopf_ai.game.observation import PlayerObservation
@@ -28,7 +28,7 @@ def normalize_observation_version(value: str) -> ObservationVersion:
             f"Unsupported observation version {value!r}; "
             f"expected one of {OBSERVATION_VERSIONS}."
         )
-    return normalized  # type: ignore[return-value]
+    return cast(ObservationVersion, normalized)
 
 
 def feature_size_for_version(version: str) -> int:
