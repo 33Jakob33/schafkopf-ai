@@ -11,7 +11,7 @@ from torch import Tensor, nn
 from torch.utils.data import Dataset
 
 from .card_play_encoding import ACTION_COUNT, OBSERVATION_FEATURE_SIZE
-from .observation_encoding import infer_observation_version
+from .observation_encoding import infer_observation_version, try_infer_observation_version
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,7 +61,7 @@ class CardPlayPolicyNetwork(nn.Module):
         self.input_size = input_size
         self.hidden_sizes = hidden_sizes
         self.action_count = action_count
-        self.observation_version = infer_observation_version(input_size)
+        self.observation_version = try_infer_observation_version(input_size)
 
         self.network = nn.Sequential(
             nn.Linear(input_size, first_hidden),
