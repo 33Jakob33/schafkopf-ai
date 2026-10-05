@@ -5,7 +5,6 @@ from schafkopf_ai.game.game_contract import GameContract
 from schafkopf_ai.game.game_type import GameType
 from schafkopf_ai.game.observation import PlayerObservation
 from schafkopf_ai.game.trick import TrickPlay
-from schafkopf_ai.training.card_play_encoding import card_to_action_index
 from schafkopf_ai.training.card_play_encoding_v2 import (
     OBSERVATION_V2_FEATURE_SIZE,
     _encode_known_voids,
@@ -51,8 +50,8 @@ def test_v2_has_compact_fixed_size() -> None:
 
     features = encode_player_observation_v2(observation)
 
-    assert OBSERVATION_V2_FEATURE_SIZE == 280
-    assert len(features) == 280
+    assert OBSERVATION_V2_FEATURE_SIZE == 222
+    assert len(features) == 222
     assert all(isinstance(value, float) for value in features)
 
 
@@ -73,10 +72,9 @@ def test_v2_unseen_trumps_exclude_own_and_played_cards() -> None:
     unseen = _unseen_cards(observation)
     mask = _encode_unseen_trumps(observation, unseen)
 
-    assert mask[card_to_action_index(own_trump)] == 0.0
-    assert mask[card_to_action_index(played_trump)] == 0.0
-    assert mask[card_to_action_index(Card(Suit.HERZ, Rank.UNTER))] == 1.0
-    assert mask[card_to_action_index(Card(Suit.SCHELLEN, Rank.UNTER))] == 1.0
+    # Wenz trump order is Eichel, Gras, Herz, Schellen Unter.
+    assert mask[:4] == [0.0, 0.0, 1.0, 1.0]
+    assert sum(mask[4:]) == 0.0
     assert _normalized_unseen_trump_count(observation, unseen) == pytest.approx(0.5)
 
 
