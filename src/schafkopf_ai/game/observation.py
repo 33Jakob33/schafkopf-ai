@@ -26,6 +26,7 @@ class PlayerObservation:
     points_by_player: tuple[int, int, int, int]
 
     called_ace_released: bool
+    known_called_ace_player: int | None = None
 
     @property
     def cards_played(self) -> tuple[Card, ...]:
