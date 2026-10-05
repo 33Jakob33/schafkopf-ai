@@ -24,13 +24,17 @@ def run_generation(
     seed: int,
     output: Path,
     progress_every: int,
+    observation_version: str,
 ) -> None:
     if games <= 0:
         raise ValueError("games must be greater than zero.")
     if progress_every < 0:
         raise ValueError("progress_every cannot be negative.")
 
-    collector = BehaviorCloningCollector(games * CARD_PLAYS_PER_GAME)
+    collector = BehaviorCloningCollector(
+        games * CARD_PLAYS_PER_GAME,
+        observation_version=observation_version,
+    )
     rng = random.Random(seed)
     contract_counts: Counter[GameType] = Counter()
 
@@ -84,6 +88,8 @@ def run_generation(
     print(f"Examples:                  {arrays.example_count:,}")
     print(f"Non-trivial decisions:     {nontrivial:,}")
     print(f"Non-trivial share:         {nontrivial / arrays.example_count:.2%}")
+    print(f"Observation version:       {collector.observation_version}")
+    print(f"Feature count:             {arrays.features.shape[1]}")
     print(f"Seed:                      {seed}")
     print(f"Elapsed:                   {elapsed:.3f} s")
     print(f"Output:                    {output}")
@@ -126,6 +132,12 @@ def parse_args() -> argparse.Namespace:
         default=250,
         help="Print progress every N games; 0 disables progress output.",
     )
+    parser.add_argument(
+        "--observation-version",
+        choices=("v1", "v2"),
+        default="v1",
+        help="Card-play observation encoding to store (default: v1).",
+    )
     return parser.parse_args()
 
 
@@ -136,6 +148,7 @@ def main() -> None:
         seed=args.seed,
         output=args.output,
         progress_every=args.progress_every,
+        observation_version=args.observation_version,
     )
 
 
