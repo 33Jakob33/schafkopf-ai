@@ -11,7 +11,10 @@ from torch import Tensor, nn
 from torch.utils.data import Dataset
 
 from .card_play_encoding import ACTION_COUNT, OBSERVATION_FEATURE_SIZE
-from .observation_encoding import infer_observation_version, try_infer_observation_version
+from .observation_encoding import (
+    infer_observation_version,
+    try_infer_observation_version,
+)
 
 
 @dataclass(frozen=True, slots=True)
