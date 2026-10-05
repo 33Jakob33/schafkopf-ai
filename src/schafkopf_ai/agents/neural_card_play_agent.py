@@ -53,7 +53,7 @@ class NeuralCardPlayAgent(Agent):
     def observation_version(self) -> str:
         version = getattr(self.model, "observation_version", None)
         if not isinstance(version, str):
-            raise RuntimeError("Neural card-play model has no observation version.")
+            raise TypeError("Neural card-play model has no observation version.")
         return version
 
     @classmethod
