@@ -9,8 +9,15 @@ from schafkopf_ai.game.bidding import BiddingAction, BiddingObservation
 from schafkopf_ai.game.card import Card
 from schafkopf_ai.game.observation import PlayerObservation
 from schafkopf_ai.training.behavior_cloning import mask_illegal_logits
+<<<<<<< Updated upstream
 from schafkopf_ai.training.card_play_encoding import action_index_to_card
 from schafkopf_ai.training.observation_encoding import encode_card_play_for_version
+=======
+from schafkopf_ai.training.card_play_encoding import (
+    action_index_to_card,
+    encode_card_play,
+)
+>>>>>>> Stashed changes
 from schafkopf_ai.training.ppo import (
     ActorCriticCardPlayNetwork,
     PPOStep,
@@ -43,6 +50,13 @@ class PPOCardPlayAgent(Agent):
         self.record_trajectory = record_trajectory
         self._trajectory: list[PPOStep] = []
 
+    @property
+    def observation_version(self) -> str:
+        version = self.model.observation_version
+        if not isinstance(version, str):
+            raise TypeError("PPO card-play model has no observation version.")
+        return version
+
     @classmethod
     def from_checkpoint(
         cls,
@@ -70,7 +84,7 @@ class PPOCardPlayAgent(Agent):
             raise ValueError("No legal cards available.")
 
         encoded = encode_card_play_for_version(
-            self.model.observation_version,
+            self.observation_version,
             observation,
             legal_cards,
         )
