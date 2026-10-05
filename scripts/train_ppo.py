@@ -88,9 +88,13 @@ def _validate_round(result: RoundResult) -> None:
     if len(result.game_state.completed_tricks) != 8:
         raise RuntimeError("Validation round does not contain eight tricks.")
     if sum(result.player_points) != 120:
-        raise RuntimeError(f"Validation Augen do not sum to 120: {result.player_points}.")
+        raise RuntimeError(
+            f"Validation Augen do not sum to 120: {result.player_points}."
+        )
     if sum(result.payments) != 0:
-        raise RuntimeError(f"Validation payments do not sum to zero: {result.payments}.")
+        raise RuntimeError(
+            f"Validation payments do not sum to zero: {result.payments}."
+        )
 
 
 def _run_validation_variant(
@@ -178,9 +182,7 @@ def validate_policy(
         heuristic_payments.append(heuristic_payment)
         policy_payments.append(policy_payment)
         deltas.append(policy_payment - heuristic_payment)
-        heuristic_wins += int(
-            focal_seat in heuristic_result.game_result.winner_players
-        )
+        heuristic_wins += int(focal_seat in heuristic_result.game_result.winner_players)
         policy_wins += int(focal_seat in policy_result.game_result.winner_players)
 
     return ValidationMetrics(
@@ -265,8 +267,7 @@ def collect_rollout(
                 agents.append(RandomAgent(rng=random.Random(opponent_seed)))
                 random_opponents += 1
             elif (
-                draw
-                < random_opponent_probability + self_play_opponent_probability
+                draw < random_opponent_probability + self_play_opponent_probability
                 and self_play_agents
             ):
                 agents.append(selection_rng.choice(self_play_agents))
