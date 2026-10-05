@@ -8,10 +8,8 @@ from torch.distributions import Categorical
 from schafkopf_ai.game.bidding import BiddingAction, BiddingObservation
 from schafkopf_ai.game.card import Card
 from schafkopf_ai.game.observation import PlayerObservation
-from schafkopf_ai.training.card_play_encoding import (
-    action_index_to_card,
-    encode_card_play,
-)
+from schafkopf_ai.training.card_play_encoding import action_index_to_card
+from schafkopf_ai.training.observation_encoding import encode_card_play_for_version
 from schafkopf_ai.training.ppo import (
     ActorCriticCardPlayNetwork,
     PPOStep,
@@ -71,7 +69,11 @@ class PPOCardPlayAgent(Agent):
         if not legal_cards:
             raise ValueError("No legal cards available.")
 
-        encoded = encode_card_play(observation, legal_cards)
+        encoded = encode_card_play_for_version(
+            self.model.observation_version,
+            observation,
+            legal_cards,
+        )
         features = torch.tensor(
             encoded.features,
             dtype=torch.float32,
