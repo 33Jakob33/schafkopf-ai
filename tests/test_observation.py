@@ -1,4 +1,4 @@
-from schafkopf_ai.game.card import Card
+from schafkopf_ai.game.card import Card, Rank, Suit
 from schafkopf_ai.game.deck import Deck
 from schafkopf_ai.game.game_contract import GameContract
 from schafkopf_ai.game.game_state import GameState
@@ -277,3 +277,79 @@ def test_observation_type() -> None:
         observation,
         PlayerObservation,
     )
+
+
+def _sauspiel_state(*, running_away: bool = False) -> GameState:
+    contract = GameContract(
+        GameType.SAUSPIEL,
+        called_suit=Suit.EICHEL,
+        declarer=0,
+    )
+    called_ace = Card(Suit.EICHEL, Rank.ACE)
+
+    if running_away:
+        called_hand = (
+            called_ace,
+            Card(Suit.EICHEL, Rank.TEN),
+            Card(Suit.EICHEL, Rank.KING),
+            Card(Suit.EICHEL, Rank.NINE),
+        )
+        reserved = set(called_hand)
+        remaining = [
+            card
+            for card in Deck().cards
+            if card not in reserved
+        ]
+        hands = (
+            tuple(remaining[:8]),
+            called_hand + tuple(remaining[8:12]),
+            tuple(remaining[12:20]),
+            tuple(remaining[20:28]),
+        )
+    else:
+        remaining = [card for card in Deck().cards if card != called_ace]
+        hands = (
+            tuple(remaining[:8]),
+            (called_ace,) + tuple(remaining[8:15]),
+            tuple(remaining[15:23]),
+            tuple(remaining[23:31]),
+        )
+
+    return GameState.from_hands(
+        hands=hands,
+        contract=contract,
+        starting_player=1,
+    )
+
+
+def test_sauspiel_partner_is_private_until_publicly_known() -> None:
+    state = _sauspiel_state()
+
+    holder_observation = state.observation_for(1)
+    other_observation = state.observation_for(2)
+
+    assert holder_observation.known_called_ace_player == 1
+    assert other_observation.known_called_ace_player is None
+
+
+def test_playing_called_ace_reveals_sauspiel_partner() -> None:
+    state = _sauspiel_state()
+    called_ace = Card(Suit.EICHEL, Rank.ACE)
+
+    assert called_ace in state.legal_moves(1)
+    state.play_card(1, called_ace)
+
+    for player in range(4):
+        assert state.observation_for(player).known_called_ace_player == 1
+
+
+def test_davonlaufen_reveals_sauspiel_partner() -> None:
+    state = _sauspiel_state(running_away=True)
+    lower_called_suit = Card(Suit.EICHEL, Rank.TEN)
+
+    assert lower_called_suit in state.legal_moves(1)
+    state.play_card(1, lower_called_suit)
+
+    assert state.called_ace_released is True
+    for player in range(4):
+        assert state.observation_for(player).known_called_ace_player == 1
