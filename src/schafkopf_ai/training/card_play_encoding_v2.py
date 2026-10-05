@@ -209,11 +209,11 @@ def _observer_team(
         return False, frozenset()
 
     called_ace = Card(contract.called_suit, RANK_ORDER[-1])
-    partner: int | None = None
+    partner = observation.known_called_ace_player
 
     for trick in (*observation.completed_tricks, observation.current_trick):
         for play in trick:
-            if play.card == called_ace:
+            if partner is None and play.card == called_ace:
                 partner = play.player
                 break
         if partner is not None:
