@@ -18,13 +18,11 @@ from schafkopf_ai.agents.ppo_card_play_agent import PPOCardPlayAgent
 from schafkopf_ai.agents.random_agent import RandomAgent
 from schafkopf_ai.game.rules import RAMSCH_RULES
 from schafkopf_ai.runner.round_runner import RoundResult, RoundRunner
-from schafkopf_ai.training.card_play_encoding import (
-    ACTION_COUNT,
-    OBSERVATION_FEATURE_SIZE,
-)
+from schafkopf_ai.training.card_play_encoding import ACTION_COUNT
 from schafkopf_ai.training.ppo import (
     ActorCriticCardPlayNetwork,
     PPORolloutBuffer,
+    checkpoint_observation_spec,
     initialize_from_checkpoint,
     ppo_update,
     save_ppo_checkpoint,
@@ -355,8 +353,12 @@ def train(
     torch.manual_seed(seed)
     device = resolve_device(device_name)
 
+    input_size, observation_version = checkpoint_observation_spec(
+        init_checkpoint,
+        device=device,
+    )
     model = ActorCriticCardPlayNetwork(
-        input_size=OBSERVATION_FEATURE_SIZE,
+        input_size=input_size,
         hidden_sizes=hidden_sizes,
         action_count=ACTION_COUNT,
     ).to(device)
@@ -384,6 +386,8 @@ def train(
     print("PPO card-play training with fixed validation and opponent pool")
     print("=" * 104)
     print(f"Initialized from:           {init_checkpoint} ({initialization_kind})")
+    print(f"Observation version:        {observation_version}")
+    print(f"Observation features:       {input_size}")
     print(f"Device:                     {device}")
     print(f"Iterations:                 {iterations}")
     print(f"Rollout games / iteration:  {rollout_games:,}")
