@@ -49,6 +49,13 @@ class NeuralCardPlayAgent(Agent):
             HeuristicAgent() if bidding_agent is None else bidding_agent
         )
 
+    @property
+    def observation_version(self) -> str:
+        version = getattr(self.model, "observation_version", None)
+        if not isinstance(version, str):
+            raise RuntimeError("Neural card-play model has no observation version.")
+        return version
+
     @classmethod
     def from_checkpoint(
         cls,
@@ -121,7 +128,7 @@ class NeuralCardPlayAgent(Agent):
             return legal_cards[0]
 
         encoded = encode_card_play_for_version(
-            self.model.observation_version,
+            self.observation_version,
             observation,
             legal_cards,
         )
