@@ -11,6 +11,7 @@ from torch import Tensor, nn
 from torch.utils.data import Dataset
 
 from .card_play_encoding import ACTION_COUNT, OBSERVATION_FEATURE_SIZE
+from .observation_encoding import infer_observation_version
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +61,7 @@ class CardPlayPolicyNetwork(nn.Module):
         self.input_size = input_size
         self.hidden_sizes = hidden_sizes
         self.action_count = action_count
+        self.observation_version = infer_observation_version(input_size)
 
         self.network = nn.Sequential(
             nn.Linear(input_size, first_hidden),
@@ -172,12 +174,15 @@ def split_indices_by_game(
 def _validate_arrays(arrays: BehaviorCloningArrays) -> None:
     example_count = arrays.example_count
 
-    if arrays.features.shape != (example_count, OBSERVATION_FEATURE_SIZE):
+    if arrays.features.ndim != 2 or arrays.features.shape[0] != example_count:
         raise ValueError(
             "Unexpected feature shape: "
-            f"{arrays.features.shape}; expected "
-            f"({example_count}, {OBSERVATION_FEATURE_SIZE})."
+            f"{arrays.features.shape}; expected a two-dimensional array "
+            f"with {example_count} rows."
         )
+
+    # Also validates that the dataset uses a supported observation encoding.
+    infer_observation_version(int(arrays.features.shape[1]))
 
     if arrays.legal_masks.shape != (example_count, ACTION_COUNT):
         raise ValueError(
