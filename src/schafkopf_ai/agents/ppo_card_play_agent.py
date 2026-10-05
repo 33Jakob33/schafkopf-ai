@@ -43,6 +43,13 @@ class PPOCardPlayAgent(Agent):
         self.record_trajectory = record_trajectory
         self._trajectory: list[PPOStep] = []
 
+    @property
+    def observation_version(self) -> str:
+        version = self.model.observation_version
+        if not isinstance(version, str):
+            raise TypeError("PPO card-play model has no observation version.")
+        return version
+
     @classmethod
     def from_checkpoint(
         cls,
@@ -70,7 +77,7 @@ class PPOCardPlayAgent(Agent):
             raise ValueError("No legal cards available.")
 
         encoded = encode_card_play_for_version(
-            self.model.observation_version,
+            self.observation_version,
             observation,
             legal_cards,
         )
