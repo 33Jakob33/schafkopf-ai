@@ -101,7 +101,9 @@ class PPORolloutBuffer:
 
     def add_episode(self, steps: list[PPOStep], terminal_return: float) -> None:
         if not steps:
-            raise ValueError("A PPO episode must contain at least one focal-player step.")
+            raise ValueError(
+                "A PPO episode must contain at least one focal-player step."
+            )
 
         self._steps.extend(steps)
         self._returns.extend([float(terminal_return)] * len(steps))
@@ -112,7 +114,9 @@ class PPORolloutBuffer:
 
         return PPOBatch(
             features=torch.stack([step.features for step in self._steps]).to(device),
-            legal_masks=torch.stack([step.legal_mask for step in self._steps]).to(device),
+            legal_masks=torch.stack([step.legal_mask for step in self._steps]).to(
+                device
+            ),
             actions=torch.tensor(
                 [step.action for step in self._steps],
                 dtype=torch.long,
@@ -423,11 +427,14 @@ def ppo_update(
             minibatch_advantages = advantages[indices]
 
             unclipped = ratios * minibatch_advantages
-            clipped = torch.clamp(
-                ratios,
-                1.0 - clip_epsilon,
-                1.0 + clip_epsilon,
-            ) * minibatch_advantages
+            clipped = (
+                torch.clamp(
+                    ratios,
+                    1.0 - clip_epsilon,
+                    1.0 + clip_epsilon,
+                )
+                * minibatch_advantages
+            )
             policy_loss = -torch.minimum(unclipped, clipped).mean()
 
             value_loss = F.mse_loss(values, batch.returns[indices])
@@ -443,12 +450,10 @@ def ppo_update(
             optimizer.step()
 
             with torch.no_grad():
-                approximate_kl = (
-                    old_log_probabilities - new_log_probabilities
-                ).mean()
+                approximate_kl = (old_log_probabilities - new_log_probabilities).mean()
                 clip_fraction = (
-                    (ratios - 1.0).abs() > clip_epsilon
-                ).to(torch.float32).mean()
+                    ((ratios - 1.0).abs() > clip_epsilon).to(torch.float32).mean()
+                )
 
             count = int(indices.shape[0])
             total_policy_loss += float(policy_loss.item()) * count
