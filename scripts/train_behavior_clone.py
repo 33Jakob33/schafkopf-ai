@@ -21,9 +21,10 @@ from schafkopf_ai.training.behavior_cloning import (
     mask_illegal_logits,
     split_indices_by_game,
 )
-from schafkopf_ai.training.card_play_encoding import (
-    ACTION_COUNT,
-    OBSERVATION_FEATURE_SIZE,
+from schafkopf_ai.training.card_play_encoding import ACTION_COUNT
+from schafkopf_ai.training.observation_encoding import (
+    infer_observation_version,
+    resolve_checkpoint_observation_version,
 )
 
 
@@ -122,6 +123,7 @@ def save_checkpoint(
             "input_size": model.input_size,
             "hidden_sizes": model.hidden_sizes,
             "action_count": model.action_count,
+            "observation_version": model.observation_version,
             "epoch": epoch,
             "validation_loss": validation_metrics.loss,
             "validation_accuracy": validation_metrics.accuracy,
@@ -151,7 +153,7 @@ def load_initial_weights(
     if not isinstance(checkpoint, dict):
         raise TypeError("Initial checkpoint must be a dictionary.")
 
-    input_size = int(checkpoint.get("input_size", OBSERVATION_FEATURE_SIZE))
+    input_size = int(checkpoint.get("input_size", model.input_size))
     action_count = int(checkpoint.get("action_count", ACTION_COUNT))
     raw_hidden_sizes = checkpoint.get("hidden_sizes", model.hidden_sizes)
 
@@ -160,10 +162,19 @@ def load_initial_weights(
 
     hidden_sizes = (int(raw_hidden_sizes[0]), int(raw_hidden_sizes[1]))
 
+    checkpoint_version = resolve_checkpoint_observation_version(
+        input_size=input_size,
+        explicit_version=checkpoint.get("observation_version"),
+    )
     if input_size != model.input_size:
         raise ValueError(
             "Initial checkpoint observation size does not match the model: "
             f"{input_size} != {model.input_size}."
+        )
+    if checkpoint_version != model.observation_version:
+        raise ValueError(
+            "Initial checkpoint observation version does not match the model: "
+            f"{checkpoint_version} != {model.observation_version}."
         )
     if action_count != model.action_count:
         raise ValueError(
@@ -235,8 +246,10 @@ def train(
         shuffle=False,
     )
 
+    input_size = int(arrays.features.shape[1])
+    observation_version = infer_observation_version(input_size)
     model = CardPlayPolicyNetwork(
-        input_size=OBSERVATION_FEATURE_SIZE,
+        input_size=input_size,
         hidden_sizes=hidden_sizes,
         action_count=ACTION_COUNT,
     ).to(device)
@@ -264,6 +277,8 @@ def train(
     print(f"Training examples:         {len(train_indices):,}")
     print(f"Validation examples:       {len(validation_indices):,}")
     print(f"Device:                    {device}")
+    print(f"Observation version:       {observation_version}")
+    print(f"Observation features:      {input_size}")
     print(f"Hidden sizes:              {hidden_sizes}")
     print(f"Batch size:                {batch_size}")
     print(f"Learning rate:             {learning_rate:g}")
