@@ -13,8 +13,8 @@ from torch.optim import Optimizer
 from .behavior_cloning import mask_illegal_logits
 from .card_play_encoding import ACTION_COUNT, OBSERVATION_FEATURE_SIZE
 from .observation_encoding import (
-    infer_observation_version,
     resolve_checkpoint_observation_version,
+    try_infer_observation_version,
 )
 
 
@@ -65,7 +65,7 @@ class ActorCriticCardPlayNetwork(nn.Module):
         self.input_size = input_size
         self.hidden_sizes = hidden_sizes
         self.action_count = action_count
-        self.observation_version = infer_observation_version(input_size)
+        self.observation_version = try_infer_observation_version(input_size)
 
         self.shared = nn.Sequential(
             nn.Linear(input_size, first_hidden),
