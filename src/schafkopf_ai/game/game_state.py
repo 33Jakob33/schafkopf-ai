@@ -237,7 +237,40 @@ class GameState:
             completed_tricks=completed_tricks,
             points_by_player=self.player_points,
             called_ace_released=self.called_ace_released,
+            known_called_ace_player=self._known_called_ace_player_for(player_index),
         )
+
+    def _known_called_ace_player_for(self, player_index: int) -> int | None:
+        if self.contract.game_type is not GameType.SAUSPIEL:
+            return None
+        if self.called_ace_player is None:
+            return None
+
+        # The holder knows their own role from their private hand.
+        if player_index == self.called_ace_player:
+            return self.called_ace_player
+
+        # Davonlaufen publicly reveals who holds the called Ace.
+        if self.called_ace_released:
+            return self.called_ace_player
+
+        called_suit = self.contract.called_suit
+        if called_suit is None:
+            return None
+
+        called_ace = Card(called_suit, Rank.ACE)
+        public_plays = [
+            play
+            for trick in self._completed_tricks
+            for play in trick.plays
+        ]
+        if self.current_trick is not None:
+            public_plays.extend(self.current_trick.plays)
+
+        if any(play.card == called_ace for play in public_plays):
+            return self.called_ace_player
+
+        return None
 
     def legal_moves(
         self,
