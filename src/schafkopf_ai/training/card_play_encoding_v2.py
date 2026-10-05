@@ -100,7 +100,9 @@ def encode_player_observation_v2(
     features.extend(_encode_current_winner(observation))
 
     features.extend(
-        _one_hot(GAME_TYPE_ORDER.index(observation.contract.game_type), len(GAME_TYPE_ORDER))
+        _one_hot(
+            GAME_TYPE_ORDER.index(observation.contract.game_type), len(GAME_TYPE_ORDER)
+        )
     )
     features.extend(_encode_optional_suit(observation.contract.trump_suit))
     features.extend(_encode_optional_suit(observation.contract.called_suit))
@@ -180,11 +182,7 @@ def _unseen_cards(observation: PlayerObservation) -> tuple[Card, ...]:
     known_cards = set(observation.hand)
     known_cards.update(observation.cards_played)
 
-    return tuple(
-        card
-        for card in _ALL_CARDS
-        if card not in known_cards
-    )
+    return tuple(card for card in _ALL_CARDS if card not in known_cards)
 
 
 def _observer_team(
@@ -253,9 +251,7 @@ def _encode_team_points(
     if not observer_team:
         return [0.0, 0.0]
 
-    own_points = sum(
-        observation.points_by_player[player] for player in observer_team
-    )
+    own_points = sum(observation.points_by_player[player] for player in observer_team)
     opposing_points = sum(observation.points_by_player) - own_points
     return [own_points / 120.0, opposing_points / 120.0]
 
@@ -335,10 +331,7 @@ def _encode_known_voids(
 ) -> list[float]:
     # Rows are relative players. Columns are:
     # trump, Eichel, Gras, Herz, Schellen.
-    voids = [
-        [False] * KNOWN_VOID_CATEGORY_COUNT
-        for _ in range(PLAYER_COUNT)
-    ]
+    voids = [[False] * KNOWN_VOID_CATEGORY_COUNT for _ in range(PLAYER_COUNT)]
 
     observer_relative = 0
     voids[observer_relative][0] = not any(
@@ -376,11 +369,7 @@ def _encode_known_voids(
             for relative_player in range(1, PLAYER_COUNT):
                 voids[relative_player][suit_index] = True
 
-    return [
-        1.0 if value else 0.0
-        for player_voids in voids
-        for value in player_voids
-    ]
+    return [1.0 if value else 0.0 for player_voids in voids for value in player_voids]
 
 
 def _apply_follow_information(
@@ -408,9 +397,7 @@ def _apply_follow_information(
             continue
 
         lead_suit_index = SUIT_ORDER.index(lead.suit) + 1
-        followed_plain_suit = (
-            not played_is_trump and play.card.suit is lead.suit
-        )
+        followed_plain_suit = not played_is_trump and play.card.suit is lead.suit
         if not followed_plain_suit:
             voids[relative_player][lead_suit_index] = True
 
