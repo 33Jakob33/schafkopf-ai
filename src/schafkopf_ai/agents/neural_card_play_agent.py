@@ -17,7 +17,10 @@ from schafkopf_ai.training.card_play_encoding import (
     ACTION_COUNT,
     OBSERVATION_FEATURE_SIZE,
     action_index_to_card,
-    encode_card_play,
+)
+from schafkopf_ai.training.observation_encoding import (
+    encode_card_play_for_version,
+    resolve_checkpoint_observation_version,
 )
 
 from .agent import Agent
@@ -74,11 +77,10 @@ class NeuralCardPlayAgent(Agent):
 
         hidden_sizes = (int(hidden_sizes_raw[0]), int(hidden_sizes_raw[1]))
 
-        if input_size != OBSERVATION_FEATURE_SIZE:
-            raise ValueError(
-                "Checkpoint observation size does not match the current encoder: "
-                f"{input_size} != {OBSERVATION_FEATURE_SIZE}."
-            )
+        observation_version = resolve_checkpoint_observation_version(
+            input_size=input_size,
+            explicit_version=checkpoint.get("observation_version"),
+        )
         if action_count != ACTION_COUNT:
             raise ValueError(
                 "Checkpoint action count does not match the current card mapping: "
@@ -90,6 +92,8 @@ class NeuralCardPlayAgent(Agent):
             hidden_sizes=hidden_sizes,
             action_count=action_count,
         )
+        if model.observation_version != observation_version:
+            raise RuntimeError("Checkpoint observation version could not be restored.")
 
         state_dict: Any = checkpoint.get("model_state_dict")
         if not isinstance(state_dict, dict):
@@ -116,7 +120,11 @@ class NeuralCardPlayAgent(Agent):
         if len(legal_cards) == 1:
             return legal_cards[0]
 
-        encoded = encode_card_play(observation, legal_cards)
+        encoded = encode_card_play_for_version(
+            self.model.observation_version,
+            observation,
+            legal_cards,
+        )
         features = torch.tensor(
             encoded.features,
             dtype=torch.float32,
