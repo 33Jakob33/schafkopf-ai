@@ -24,6 +24,7 @@ from schafkopf_ai.training.dagger import (
     aggregate_dagger_arrays,
 )
 from schafkopf_ai.training.demonstrations import BehaviorCloningCollector
+from schafkopf_ai.training.observation_encoding import infer_observation_version
 
 CARD_PLAYS_PER_FOCAL_GAME = 8
 
@@ -57,7 +58,16 @@ def run_generation(
         checkpoint,
         device=device,
     )
-    collector = BehaviorCloningCollector(games * CARD_PLAYS_PER_FOCAL_GAME)
+    base_version = infer_observation_version(int(base_arrays.features.shape[1]))
+    if policy_agent.model.observation_version != base_version:
+        raise ValueError(
+            "DAgger base dataset and learner checkpoint use different observation "
+            f"versions: {base_version} != {policy_agent.model.observation_version}."
+        )
+    collector = BehaviorCloningCollector(
+        games * CARD_PLAYS_PER_FOCAL_GAME,
+        observation_version=base_version,
+    )
 
     contract_counts: Counter[GameType] = Counter()
     total_disagreements = 0
@@ -136,6 +146,8 @@ def run_generation(
     print(f"Base dataset:               {base_dataset}")
     print(f"Policy checkpoint:          {checkpoint}")
     print(f"Device:                     {device}")
+    print(f"Observation version:        {base_version}")
+    print(f"Feature count:              {base_arrays.features.shape[1]}")
     print(f"Games:                      {games:,}")
     print(f"New expert labels:          {additions.example_count:,}")
     print(f"Base examples:              {base_arrays.example_count:,}")
