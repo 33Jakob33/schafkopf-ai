@@ -83,47 +83,31 @@ def run_evaluation(
     print(f"Paired deals:               {games:,}")
     print(f"Rounds executed:            {games * 2:,}")
     print(
-        "Reference:                  "
-        f"{result.reference_name} ({result.reference_kind})"
+        f"Reference:                  {result.reference_name} ({result.reference_kind})"
     )
+    print(f"Reference checkpoint:       {result.reference_checkpoint or '-'}")
     print(
-        "Reference checkpoint:       "
-        f"{result.reference_checkpoint or '-'}"
+        f"Candidate:                  {result.candidate_name} ({result.candidate_kind})"
     )
-    print(
-        "Candidate:                  "
-        f"{result.candidate_name} ({result.candidate_kind})"
-    )
-    print(
-        "Candidate checkpoint:       "
-        f"{result.candidate_checkpoint or '-'}"
-    )
+    print(f"Candidate checkpoint:       {result.candidate_checkpoint or '-'}")
     print(f"Seed:                       {seed}")
     print(f"Elapsed:                    {elapsed:.3f} s")
 
     print("\nPrimary paired result")
     print("-" * 96)
     print(
-        f"{result.reference_name:<26}"
-        f"{result.mean_reference_payment:+.3f} mean payment"
+        f"{result.reference_name:<26}{result.mean_reference_payment:+.3f} mean payment"
     )
     print(
-        f"{result.candidate_name:<26}"
-        f"{result.mean_candidate_payment:+.3f} mean payment"
+        f"{result.candidate_name:<26}{result.mean_candidate_payment:+.3f} mean payment"
     )
     print(
         f"Mean {result.candidate_name} - {result.reference_name}: "
         f"{result.mean_delta:+.3f}"
     )
     print(f"95% CI paired difference:   [{ci_low:+.3f}, {ci_high:+.3f}]")
-    print(
-        f"{result.reference_name} win rate: "
-        f"{result.reference_win_rate:.2%}"
-    )
-    print(
-        f"{result.candidate_name} win rate: "
-        f"{result.candidate_win_rate:.2%}"
-    )
+    print(f"{result.reference_name} win rate: {result.reference_win_rate:.2%}")
+    print(f"{result.candidate_name} win rate: {result.candidate_win_rate:.2%}")
 
     print("\nPer-deal payment comparison")
     print("-" * 96)
