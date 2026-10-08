@@ -9,15 +9,8 @@ from schafkopf_ai.game.bidding import BiddingAction, BiddingObservation
 from schafkopf_ai.game.card import Card
 from schafkopf_ai.game.observation import PlayerObservation
 from schafkopf_ai.training.behavior_cloning import mask_illegal_logits
-<<<<<<< Updated upstream
 from schafkopf_ai.training.card_play_encoding import action_index_to_card
 from schafkopf_ai.training.observation_encoding import encode_card_play_for_version
-=======
-from schafkopf_ai.training.card_play_encoding import (
-    action_index_to_card,
-    encode_card_play,
-)
->>>>>>> Stashed changes
 from schafkopf_ai.training.ppo import (
     ActorCriticCardPlayNetwork,
     PPOStep,
