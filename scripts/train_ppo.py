@@ -750,8 +750,7 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=1.0,
         help=(
-            "Discount factor between consecutive focal-player decisions "
-            "(default: 1.0)."
+            "Discount factor between consecutive focal-player decisions (default: 1.0)."
         ),
     )
     parser.add_argument(
