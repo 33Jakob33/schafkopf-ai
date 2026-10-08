@@ -5,7 +5,7 @@ import copy
 import random
 import statistics
 import time
-from collections import deque
+from collections import defaultdict, deque
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -16,6 +16,7 @@ from schafkopf_ai.agents.agent import Agent
 from schafkopf_ai.agents.heuristic_agent import HeuristicAgent
 from schafkopf_ai.agents.ppo_card_play_agent import PPOCardPlayAgent
 from schafkopf_ai.agents.random_agent import RandomAgent
+from schafkopf_ai.game.game_type import GameType
 from schafkopf_ai.game.rules import RAMSCH_RULES
 from schafkopf_ai.runner.round_runner import RoundResult, RoundRunner
 from schafkopf_ai.training.card_play_encoding import ACTION_COUNT
@@ -30,6 +31,24 @@ from schafkopf_ai.training.ppo import (
 
 
 @dataclass(frozen=True, slots=True)
+class ContractRolloutMetrics:
+    games: int
+    wins: int
+    payments: tuple[int, ...]
+
+    @property
+    def mean_payment(self) -> float:
+        return statistics.fmean(self.payments)
+
+    @property
+    def win_rate(self) -> float:
+        return self.wins / self.games
+
+    def mean_reward(self, reward_scale: float) -> float:
+        return self.mean_payment * reward_scale
+
+
+@dataclass(frozen=True, slots=True)
 class RolloutMetrics:
     games: int
     wins: int
@@ -38,6 +57,7 @@ class RolloutMetrics:
     random_opponents: int
     heuristic_opponents: int
     self_play_opponents: int
+    by_contract: dict[GameType, ContractRolloutMetrics]
 
     @property
     def mean_payment(self) -> float:
@@ -49,6 +69,34 @@ class RolloutMetrics:
 
 
 @dataclass(frozen=True, slots=True)
+class ValidationContractMetrics:
+    policy_payments: tuple[int, ...]
+    heuristic_payments: tuple[int, ...]
+    deltas: tuple[int, ...]
+    policy_wins: int
+
+    @property
+    def games(self) -> int:
+        return len(self.deltas)
+
+    @property
+    def mean_policy_payment(self) -> float:
+        return statistics.fmean(self.policy_payments)
+
+    @property
+    def mean_heuristic_payment(self) -> float:
+        return statistics.fmean(self.heuristic_payments)
+
+    @property
+    def mean_delta(self) -> float:
+        return statistics.fmean(self.deltas)
+
+    @property
+    def policy_win_rate(self) -> float:
+        return self.policy_wins / self.games
+
+
+@dataclass(frozen=True, slots=True)
 class ValidationMetrics:
     games: int
     policy_payments: tuple[int, ...]
@@ -56,6 +104,7 @@ class ValidationMetrics:
     deltas: tuple[int, ...]
     policy_wins: int
     heuristic_wins: int
+    by_contract: dict[GameType, ValidationContractMetrics]
 
     @property
     def mean_policy_payment(self) -> float:
@@ -155,6 +204,10 @@ def validate_policy(
     deltas: list[int] = []
     policy_wins = 0
     heuristic_wins = 0
+    contract_policy_payments: dict[GameType, list[int]] = defaultdict(list)
+    contract_heuristic_payments: dict[GameType, list[int]] = defaultdict(list)
+    contract_deltas: dict[GameType, list[int]] = defaultdict(list)
+    contract_policy_wins: dict[GameType, int] = defaultdict(int)
 
     for game_index in range(games):
         focal_seat = game_index % 4
@@ -179,11 +232,29 @@ def validate_policy(
         heuristic_payment = heuristic_result.payments[focal_seat]
         policy_payment = policy_result.payments[focal_seat]
 
+        delta = policy_payment - heuristic_payment
         heuristic_payments.append(heuristic_payment)
         policy_payments.append(policy_payment)
-        deltas.append(policy_payment - heuristic_payment)
+        deltas.append(delta)
         heuristic_wins += int(focal_seat in heuristic_result.game_result.winner_players)
-        policy_wins += int(focal_seat in policy_result.game_result.winner_players)
+        policy_won = int(focal_seat in policy_result.game_result.winner_players)
+        policy_wins += policy_won
+
+        game_type = policy_result.contract.game_type
+        contract_heuristic_payments[game_type].append(heuristic_payment)
+        contract_policy_payments[game_type].append(policy_payment)
+        contract_deltas[game_type].append(delta)
+        contract_policy_wins[game_type] += policy_won
+
+    by_contract = {
+        game_type: ValidationContractMetrics(
+            policy_payments=tuple(contract_policy_payments[game_type]),
+            heuristic_payments=tuple(contract_heuristic_payments[game_type]),
+            deltas=tuple(contract_deltas[game_type]),
+            policy_wins=contract_policy_wins[game_type],
+        )
+        for game_type in contract_deltas
+    }
 
     return ValidationMetrics(
         games=games,
@@ -192,7 +263,47 @@ def validate_policy(
         deltas=tuple(deltas),
         policy_wins=policy_wins,
         heuristic_wins=heuristic_wins,
+        by_contract=by_contract,
     )
+
+
+def _print_rollout_contract_metrics(
+    metrics: RolloutMetrics,
+    *,
+    reward_scale: float,
+) -> None:
+    print("  rollout by contract")
+    for game_type in GameType:
+        contract = metrics.by_contract.get(game_type)
+        if contract is None:
+            print(f"    {game_type.value:<12} n={0:>5}  no games")
+            continue
+
+        print(
+            f"    {game_type.value:<12} "
+            f"n={contract.games:>5,}  "
+            f"pay={contract.mean_payment:>+8.3f}  "
+            f"reward={contract.mean_reward(reward_scale):>+7.4f}  "
+            f"win={contract.win_rate:>6.2%}"
+        )
+
+
+def _print_validation_contract_metrics(metrics: ValidationMetrics) -> None:
+    print("    validation by contract")
+    for game_type in GameType:
+        contract = metrics.by_contract.get(game_type)
+        if contract is None:
+            print(f"      {game_type.value:<12} n={0:>5}  no games")
+            continue
+
+        print(
+            f"      {game_type.value:<12} "
+            f"n={contract.games:>5,}  "
+            f"ppo={contract.mean_policy_payment:>+8.3f}  "
+            f"heur={contract.mean_heuristic_payment:>+8.3f}  "
+            f"delta={contract.mean_delta:>+8.3f}  "
+            f"win={contract.policy_win_rate:>6.2%}"
+        )
 
 
 def _snapshot_agent(
@@ -248,6 +359,8 @@ def collect_rollout(
     random_opponents = 0
     heuristic_opponents = 0
     self_play_opponents = 0
+    contract_payments: dict[GameType, list[int]] = defaultdict(list)
+    contract_wins: dict[GameType, int] = defaultdict(int)
 
     for local_game_index in range(games):
         game_index = global_game_offset + local_game_index
@@ -292,9 +405,24 @@ def collect_rollout(
             )
 
         payment = result.payments[focal_seat]
+        won = int(focal_seat in result.game_result.winner_players)
         payments.append(payment)
-        wins += int(focal_seat in result.game_result.winner_players)
+        wins += won
+
+        game_type = result.contract.game_type
+        contract_payments[game_type].append(payment)
+        contract_wins[game_type] += won
+
         rollout.add_episode(trajectory, payment * reward_scale)
+
+    by_contract = {
+        game_type: ContractRolloutMetrics(
+            games=len(game_payments),
+            wins=contract_wins[game_type],
+            payments=tuple(game_payments),
+        )
+        for game_type, game_payments in contract_payments.items()
+    }
 
     return rollout, RolloutMetrics(
         games=games,
@@ -304,6 +432,7 @@ def collect_rollout(
         random_opponents=random_opponents,
         heuristic_opponents=heuristic_opponents,
         self_play_opponents=self_play_opponents,
+        by_contract=by_contract,
     )
 
 
@@ -437,6 +566,7 @@ def train(
         f" | win {initial_validation.policy_win_rate:.2%}"
         "  [val-best]"
     )
+    _print_validation_contract_metrics(initial_validation)
     print()
 
     for iteration in range(1, iterations + 1):
@@ -500,6 +630,10 @@ def train(
             f"| pool {len(opponent_pool):>2} "
             f"| {elapsed:>7.1f}s"
         )
+        _print_rollout_contract_metrics(
+            rollout_metrics,
+            reward_scale=reward_scale,
+        )
 
         if iteration % validation_every == 0 or iteration == iterations:
             validation = validate_policy(
@@ -532,6 +666,7 @@ def train(
                 f" | win {validation.policy_win_rate:.2%}"
                 f"{marker}"
             )
+            _print_validation_contract_metrics(validation)
 
     print("\nPPO training complete")
     print("-" * 104)
