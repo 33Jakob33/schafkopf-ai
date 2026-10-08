@@ -244,12 +244,8 @@ def evaluate_paired_agents(
             candidate_payment,
         )
 
-        reference_wins += int(
-            focal_seat in reference_result.game_result.winner_players
-        )
-        candidate_wins += int(
-            focal_seat in candidate_result.game_result.winner_players
-        )
+        reference_wins += int(focal_seat in reference_result.game_result.winner_players)
+        candidate_wins += int(focal_seat in candidate_result.game_result.winner_players)
 
         if candidate_payment > reference_payment:
             candidate_better += 1
