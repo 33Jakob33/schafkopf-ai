@@ -36,6 +36,7 @@ class PPOBatch:
     actions: Tensor
     old_log_probabilities: Tensor
     old_values: Tensor
+    advantages: Tensor
     returns: Tensor
 
 
@@ -88,25 +89,81 @@ class ActorCriticCardPlayNetwork(nn.Module):
         return logits, values
 
 
+def compute_gae(
+    *,
+    values: list[float],
+    terminal_return: float,
+    gamma: float,
+    gae_lambda: float,
+) -> tuple[list[float], list[float]]:
+    """
+    Compute GAE advantages and value targets for one complete game.
+
+    A Schafkopf episode has no shaped intermediate rewards here: all focal-player
+    card decisions receive zero immediate reward except the last decision, which
+    receives the scaled final settlement. Consecutive time steps are consecutive
+    decisions by the focal player, not every card played at the table.
+    """
+    if not values:
+        raise ValueError("GAE requires at least one value estimate.")
+    if not 0.0 < gamma <= 1.0:
+        raise ValueError("GAE gamma must be in (0, 1].")
+    if not 0.0 <= gae_lambda <= 1.0:
+        raise ValueError("GAE lambda must be between 0 and 1.")
+
+    rewards = [0.0] * len(values)
+    rewards[-1] = float(terminal_return)
+
+    advantages = [0.0] * len(values)
+    gae = 0.0
+
+    for index in range(len(values) - 1, -1, -1):
+        next_value = values[index + 1] if index + 1 < len(values) else 0.0
+        delta = rewards[index] + gamma * next_value - values[index]
+        gae = delta + gamma * gae_lambda * gae
+        advantages[index] = gae
+
+    returns = [
+        advantage + value for advantage, value in zip(advantages, values, strict=True)
+    ]
+    return advantages, returns
+
+
 class PPORolloutBuffer:
     """On-policy rollout storage for complete focal-player trajectories."""
 
     def __init__(self) -> None:
         self._steps: list[PPOStep] = []
+        self._advantages: list[float] = []
         self._returns: list[float] = []
 
     @property
     def sample_count(self) -> int:
         return len(self._steps)
 
-    def add_episode(self, steps: list[PPOStep], terminal_return: float) -> None:
+    def add_episode(
+        self,
+        steps: list[PPOStep],
+        terminal_return: float,
+        *,
+        gamma: float = 1.0,
+        gae_lambda: float = 0.95,
+    ) -> None:
         if not steps:
             raise ValueError(
                 "A PPO episode must contain at least one focal-player step."
             )
 
+        advantages, returns = compute_gae(
+            values=[step.value for step in steps],
+            terminal_return=terminal_return,
+            gamma=gamma,
+            gae_lambda=gae_lambda,
+        )
+
         self._steps.extend(steps)
-        self._returns.extend([float(terminal_return)] * len(steps))
+        self._advantages.extend(advantages)
+        self._returns.extend(returns)
 
     def as_batch(self, device: torch.device) -> PPOBatch:
         if not self._steps:
@@ -129,6 +186,11 @@ class PPORolloutBuffer:
             ),
             old_values=torch.tensor(
                 [step.value for step in self._steps],
+                dtype=torch.float32,
+                device=device,
+            ),
+            advantages=torch.tensor(
+                self._advantages,
                 dtype=torch.float32,
                 device=device,
             ),
@@ -304,6 +366,8 @@ def save_ppo_checkpoint(
     seed: int,
     initialized_from: str | Path | None,
     validation_delta: float | None = None,
+    gae_gamma: float | None = None,
+    gae_lambda: float | None = None,
 ) -> None:
     checkpoint_path = Path(path)
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
@@ -319,6 +383,8 @@ def save_ppo_checkpoint(
             "iteration": iteration,
             "mean_payment": mean_payment,
             "validation_delta": validation_delta,
+            "gae_gamma": gae_gamma,
+            "gae_lambda": gae_lambda,
             "seed": seed,
             "initialized_from": (
                 str(initialized_from) if initialized_from is not None else None
@@ -394,7 +460,7 @@ def ppo_update(
     batch = rollout.as_batch(device)
     sample_count = batch.actions.shape[0]
 
-    advantages = batch.returns - batch.old_values
+    advantages = batch.advantages
     if sample_count > 1:
         advantages = (advantages - advantages.mean()) / (
             advantages.std(unbiased=False) + 1e-8
