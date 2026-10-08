@@ -332,6 +332,8 @@ def collect_rollout(
     self_play_opponent_probability: float,
     self_play_agents: tuple[PPOCardPlayAgent, ...],
     reward_scale: float,
+    gae_gamma: float,
+    gae_lambda: float,
 ) -> tuple[PPORolloutBuffer, RolloutMetrics]:
     if games <= 0:
         raise ValueError("rollout games must be greater than zero.")
@@ -345,6 +347,10 @@ def collect_rollout(
         )
     if reward_scale <= 0.0:
         raise ValueError("reward scale must be positive.")
+    if not 0.0 < gae_gamma <= 1.0:
+        raise ValueError("GAE gamma must be in (0, 1].")
+    if not 0.0 <= gae_lambda <= 1.0:
+        raise ValueError("GAE lambda must be between 0 and 1.")
 
     rollout = PPORolloutBuffer()
     learner = PPOCardPlayAgent(
@@ -413,7 +419,12 @@ def collect_rollout(
         contract_payments[game_type].append(payment)
         contract_wins[game_type] += won
 
-        rollout.add_episode(trajectory, payment * reward_scale)
+        rollout.add_episode(
+            trajectory,
+            payment * reward_scale,
+            gamma=gae_gamma,
+            gae_lambda=gae_lambda,
+        )
 
     by_contract = {
         game_type: ContractRolloutMetrics(
@@ -455,6 +466,8 @@ def train(
     opponent_pool_size: int,
     snapshot_every: int,
     reward_scale: float,
+    gae_gamma: float,
+    gae_lambda: float,
     validation_every: int,
     validation_games: int,
     validation_seed: int,
@@ -474,6 +487,10 @@ def train(
         raise ValueError("snapshot_every must be greater than zero.")
     if opponent_pool_size < 0:
         raise ValueError("opponent_pool_size cannot be negative.")
+    if not 0.0 < gae_gamma <= 1.0:
+        raise ValueError("GAE gamma must be in (0, 1].")
+    if not 0.0 <= gae_lambda <= 1.0:
+        raise ValueError("GAE lambda must be between 0 and 1.")
     if random_opponent_probability + self_play_opponent_probability > 1.0:
         raise ValueError(
             "random and self-play opponent probabilities cannot sum above one."
@@ -527,6 +544,8 @@ def train(
     print(f"Clip epsilon:               {clip_epsilon:g}")
     print(f"Entropy coefficient:        {entropy_coefficient:g}")
     print(f"Reward scale:               {reward_scale:g}")
+    print(f"GAE gamma:                  {gae_gamma:g}")
+    print(f"GAE lambda:                 {gae_lambda:g}")
     print(
         "Opponent mix:               "
         f"{random_opponent_probability:.0%} Random / "
@@ -556,6 +575,8 @@ def train(
         validation_delta=initial_validation.mean_delta,
         seed=seed,
         initialized_from=init_checkpoint,
+        gae_gamma=gae_gamma,
+        gae_lambda=gae_lambda,
     )
 
     print(
@@ -580,6 +601,8 @@ def train(
             self_play_opponent_probability=self_play_opponent_probability,
             self_play_agents=tuple(opponent_pool),
             reward_scale=reward_scale,
+            gae_gamma=gae_gamma,
+            gae_lambda=gae_lambda,
         )
         total_games += rollout_games
 
@@ -606,6 +629,8 @@ def train(
             validation_delta=None,
             seed=seed,
             initialized_from=init_checkpoint,
+            gae_gamma=gae_gamma,
+            gae_lambda=gae_lambda,
         )
 
         if (
@@ -655,6 +680,8 @@ def train(
                     validation_delta=validation.mean_delta,
                     seed=seed,
                     initialized_from=init_checkpoint,
+                    gae_gamma=gae_gamma,
+                    gae_lambda=gae_lambda,
                 )
                 marker = "  [val-best]"
 
@@ -718,6 +745,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--opponent-pool-size", type=int, default=8)
     parser.add_argument("--snapshot-every", type=int, default=5)
     parser.add_argument("--reward-scale", type=float, default=0.01)
+    parser.add_argument(
+        "--gae-gamma",
+        type=float,
+        default=1.0,
+        help=(
+            "Discount factor between consecutive focal-player decisions "
+            "(default: 1.0)."
+        ),
+    )
+    parser.add_argument(
+        "--gae-lambda",
+        type=float,
+        default=0.95,
+        help="GAE bias/variance trade-off parameter (default: 0.95).",
+    )
     parser.add_argument("--validation-every", type=int, default=5)
     parser.add_argument("--validation-games", type=int, default=2_000)
     parser.add_argument("--validation-seed", type=int, default=20_260_918)
@@ -748,6 +790,8 @@ def main() -> None:
         opponent_pool_size=args.opponent_pool_size,
         snapshot_every=args.snapshot_every,
         reward_scale=args.reward_scale,
+        gae_gamma=args.gae_gamma,
+        gae_lambda=args.gae_lambda,
         validation_every=args.validation_every,
         validation_games=args.validation_games,
         validation_seed=args.validation_seed,
