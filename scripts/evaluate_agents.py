@@ -7,6 +7,7 @@ from pathlib import Path
 
 from schafkopf_ai.evaluation.paired import (
     EvaluationAgentSpec,
+    OPPONENT_MODES,
     PairedStats,
     available_agent_kinds,
     confidence_interval_95,
@@ -22,6 +23,7 @@ def _default_name(kind: str) -> str:
         "dagger": "DAgger",
         "neural": "Neural",
         "ppo": "PPO",
+        "specialist": "Specialist",
     }
     return names.get(kind.lower(), kind)
 
@@ -38,6 +40,7 @@ def run_evaluation(
     seed: int,
     progress_every: int,
     device: str,
+    opponent_mode: str,
 ) -> None:
     reference = EvaluationAgentSpec(
         kind=reference_kind,
@@ -70,6 +73,7 @@ def run_evaluation(
         device=device,
         progress_every=progress_every,
         progress_callback=print_progress,
+        opponent_mode=opponent_mode,
     )
 
     elapsed = time.perf_counter() - start
@@ -91,6 +95,7 @@ def run_evaluation(
     )
     print(f"Candidate checkpoint:       {result.candidate_checkpoint or '-'}")
     print(f"Seed:                       {seed}")
+    print(f"Opponent mode:              {opponent_mode}")
     print(f"Elapsed:                    {elapsed:.3f} s")
 
     print("\nPrimary paired result")
@@ -178,6 +183,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--progress-every", type=int, default=1_000)
     parser.add_argument("--device", default="cpu")
+    parser.add_argument(
+        "--opponent-mode",
+        choices=OPPONENT_MODES,
+        default="heuristic-bid-random-card",
+        help=(
+            "Opponent policy. The default keeps bidding heuristic/realistic "
+            "while randomizing only opponent card play; 'random' reproduces "
+            "the legacy fully-random opponent evaluation."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -194,6 +209,7 @@ def main() -> None:
         seed=args.seed,
         progress_every=args.progress_every,
         device=args.device,
+        opponent_mode=args.opponent_mode,
     )
 
 
