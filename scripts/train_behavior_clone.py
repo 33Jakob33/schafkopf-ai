@@ -12,13 +12,15 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 from torch.optim import AdamW
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader, Subset, WeightedRandomSampler
 
 from schafkopf_ai.training.behavior_cloning import (
     BehaviorCloningDataset,
     CardPlayPolicyModel,
     architecture_for_observation_version,
+    contract_balance_weights,
     create_card_play_policy,
+    filter_training_indices,
     load_behavior_cloning_arrays,
     mask_illegal_logits,
     split_indices_by_game,
@@ -116,6 +118,8 @@ def save_checkpoint(
     dataset_path: Path,
     seed: int,
     initialized_from: Path | None,
+    nontrivial_only: bool,
+    contract_balance_alpha: float,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -137,6 +141,8 @@ def save_checkpoint(
             "initialized_from": (
                 str(initialized_from) if initialized_from is not None else None
             ),
+            "training_nontrivial_only": nontrivial_only,
+            "contract_balance_alpha": contract_balance_alpha,
         },
         path,
     )
@@ -233,6 +239,8 @@ def train(
     device_name: str,
     hidden_sizes: tuple[int, int],
     gru_hidden_size: int,
+    nontrivial_only: bool,
+    contract_balance_alpha: float,
     init_checkpoint: Path | None = None,
 ) -> None:
     if epochs <= 0:
@@ -241,6 +249,8 @@ def train(
         raise ValueError("batch_size must be greater than zero.")
     if learning_rate <= 0.0:
         raise ValueError("learning_rate must be positive.")
+    if not 0.0 <= contract_balance_alpha <= 1.0:
+        raise ValueError("contract_balance_alpha must be between 0 and 1.")
 
     random.seed(seed)
     np.random.seed(seed)
@@ -249,11 +259,18 @@ def train(
     device = resolve_device(device_name)
     arrays = load_behavior_cloning_arrays(dataset_path)
     dataset = BehaviorCloningDataset(arrays)
-    train_indices, validation_indices = split_indices_by_game(
+    split_train_indices, validation_indices = split_indices_by_game(
         arrays.game_ids,
         validation_fraction=validation_fraction,
         seed=seed,
     )
+    train_indices = filter_training_indices(
+        split_train_indices,
+        arrays.legal_counts,
+        nontrivial_only=nontrivial_only,
+    )
+    if not train_indices:
+        raise ValueError("Training selection contains no examples.")
 
     train_dataset = Subset(dataset, train_indices)
     validation_dataset = Subset(dataset, validation_indices)
@@ -261,12 +278,35 @@ def train(
     generator = torch.Generator()
     generator.manual_seed(seed)
 
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        generator=generator,
-    )
+    if contract_balance_alpha > 0.0:
+        if arrays.contract_ids is None:
+            raise ValueError(
+                "Contract-balanced sampling requires a dataset with contract_ids. "
+                "Regenerate the dataset with the current generator."
+            )
+        sample_weights = contract_balance_weights(
+            arrays.contract_ids,
+            train_indices,
+            alpha=contract_balance_alpha,
+        )
+        sampler = WeightedRandomSampler(
+            weights=torch.from_numpy(sample_weights),
+            num_samples=len(train_indices),
+            replacement=True,
+            generator=generator,
+        )
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            sampler=sampler,
+        )
+    else:
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            generator=generator,
+        )
     validation_loader = DataLoader(
         validation_dataset,
         batch_size=batch_size,
@@ -302,7 +342,8 @@ def train(
     print("=" * 88)
     print(f"Dataset:                   {dataset_path}")
     print(f"Examples:                  {arrays.example_count:,}")
-    print(f"Training examples:         {len(train_indices):,}")
+    print(f"Training examples (split): {len(split_train_indices):,}")
+    print(f"Training examples (used):  {len(train_indices):,}")
     print(f"Validation examples:       {len(validation_indices):,}")
     print(f"Device:                    {device}")
     print(f"Observation version:       {observation_version}")
@@ -313,6 +354,8 @@ def train(
         print(f"GRU hidden size:           {model.gru_hidden_size}")
     print(f"Batch size:                {batch_size}")
     print(f"Learning rate:             {learning_rate:g}")
+    print(f"Non-trivial only:          {nontrivial_only}")
+    print(f"Contract balance alpha:    {contract_balance_alpha:g}")
     print(
         "Initialized from:           "
         f"{init_checkpoint if init_checkpoint is not None else 'random weights'}"
@@ -355,6 +398,8 @@ def train(
                 dataset_path=dataset_path,
                 seed=seed,
                 initialized_from=init_checkpoint,
+                nontrivial_only=nontrivial_only,
+                contract_balance_alpha=contract_balance_alpha,
             )
             print(f"  saved new best checkpoint -> {output}")
 
@@ -406,6 +451,24 @@ def parse_args() -> argparse.Namespace:
         default=128,
         help="Hidden size of the V3 public-history GRU (default: 128).",
     )
+    parser.add_argument(
+        "--nontrivial-only",
+        action="store_true",
+        help=(
+            "Train only on decisions with more than one legal card. Forced moves "
+            "have zero masked cross-entropy signal and otherwise waste batches."
+        ),
+    )
+    parser.add_argument(
+        "--contract-balance-alpha",
+        type=float,
+        default=0.0,
+        help=(
+            "Tempered contract rebalancing in [0,1]: 0 keeps the natural "
+            "distribution, 0.5 moderately upweights rare contracts, and 1 "
+            "gives observed contracts equal expected sampling mass."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -423,6 +486,8 @@ def main() -> None:
         device_name=args.device,
         hidden_sizes=(args.hidden_1, args.hidden_2),
         gru_hidden_size=args.gru_hidden_size,
+        nontrivial_only=args.nontrivial_only,
+        contract_balance_alpha=args.contract_balance_alpha,
         init_checkpoint=args.init_checkpoint,
     )
 
