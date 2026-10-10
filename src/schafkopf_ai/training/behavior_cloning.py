@@ -310,8 +310,6 @@ def split_indices_by_game(
     return train_indices, validation_indices
 
 
-
-
 def filter_indices_by_role(
     indices: list[int],
     role_ids: np.ndarray,
