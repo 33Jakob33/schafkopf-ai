@@ -69,7 +69,7 @@ class SpecialistCardPlayAgent(Agent):
         for role_key in ROLE_KEYS:
             raw_checkpoint = raw_roles.get(role_key)
             if not isinstance(raw_checkpoint, str):
-                raise ValueError(
+                raise TypeError(
                     f"Specialist manifest has no checkpoint for {role_key!r}."
                 )
             checkpoint = Path(raw_checkpoint)
