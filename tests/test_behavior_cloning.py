@@ -147,11 +147,14 @@ def test_filter_training_indices_can_drop_forced_moves() -> None:
     )
 
     assert filtered == [1, 3]
-    assert filter_training_indices(
-        indices,
-        legal_counts,
-        nontrivial_only=False,
-    ) == indices
+    assert (
+        filter_training_indices(
+            indices,
+            legal_counts,
+            nontrivial_only=False,
+        )
+        == indices
+    )
 
 
 def test_contract_balance_weights_equalize_contract_mass_at_alpha_one() -> None:
