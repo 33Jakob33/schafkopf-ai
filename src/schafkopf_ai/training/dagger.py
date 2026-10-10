@@ -117,4 +117,12 @@ def aggregate_dagger_arrays(
             (base.legal_counts, additions.legal_counts),
             axis=0,
         ),
+        contract_ids=(
+            np.concatenate(
+                (base.contract_ids, additions.contract_ids),
+                axis=0,
+            )
+            if base.contract_ids is not None and additions.contract_ids is not None
+            else None
+        ),
     )
