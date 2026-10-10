@@ -133,6 +133,7 @@ def test_behavior_cloning_dataset_round_trip_preserves_contract_ids(
     loaded = load_behavior_cloning_arrays(path)
 
     assert loaded.contract_ids is not None
+    assert arrays.contract_ids is not None
     assert np.array_equal(loaded.contract_ids, arrays.contract_ids)
 
 
