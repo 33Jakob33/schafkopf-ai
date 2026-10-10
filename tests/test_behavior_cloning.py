@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import numpy as np
+import pytest
 import torch
 
 from schafkopf_ai.agents.neural_card_play_agent import NeuralCardPlayAgent
@@ -12,6 +13,8 @@ from schafkopf_ai.training.behavior_cloning import (
     BehaviorCloningArrays,
     CardPlayPolicyNetwork,
     GRUCardPlayPolicyNetwork,
+    contract_balance_weights,
+    filter_training_indices,
     load_behavior_cloning_arrays,
     mask_illegal_logits,
     save_behavior_cloning_arrays,
@@ -80,6 +83,8 @@ def test_collector_records_heuristic_target_as_legal_action() -> None:
     assert arrays.example_count == 1
     assert arrays.game_ids.tolist() == [12]
     assert arrays.legal_counts.tolist() == [2]
+    assert arrays.contract_ids is not None
+    assert arrays.contract_ids.tolist() == [2]
     assert int(arrays.targets[0]) == card_to_action_index(second)
     assert arrays.legal_masks[0, card_to_action_index(second)]
 
@@ -105,6 +110,60 @@ def test_behavior_cloning_dataset_round_trip(tmp_path: Path) -> None:
     assert np.array_equal(loaded.legal_masks, arrays.legal_masks)
     assert np.array_equal(loaded.targets, arrays.targets)
     assert np.array_equal(loaded.game_ids, arrays.game_ids)
+    assert loaded.contract_ids is None
+
+
+def test_behavior_cloning_dataset_round_trip_preserves_contract_ids(
+    tmp_path: Path,
+) -> None:
+    features = np.zeros((4, OBSERVATION_FEATURE_SIZE), dtype=np.float16)
+    legal_masks = np.zeros((4, ACTION_COUNT), dtype=np.bool_)
+    legal_masks[:, 0] = True
+    arrays = BehaviorCloningArrays(
+        features=features,
+        legal_masks=legal_masks,
+        targets=np.zeros(4, dtype=np.uint8),
+        game_ids=np.arange(4, dtype=np.uint32),
+        legal_counts=np.ones(4, dtype=np.uint8),
+        contract_ids=np.asarray([0, 1, 2, 4], dtype=np.uint8),
+    )
+    path = tmp_path / "bc_contracts.npz"
+
+    save_behavior_cloning_arrays(path, arrays)
+    loaded = load_behavior_cloning_arrays(path)
+
+    assert loaded.contract_ids is not None
+    assert np.array_equal(loaded.contract_ids, arrays.contract_ids)
+
+
+def test_filter_training_indices_can_drop_forced_moves() -> None:
+    indices = [0, 1, 2, 3]
+    legal_counts = np.asarray([1, 2, 1, 5], dtype=np.uint8)
+
+    filtered = filter_training_indices(
+        indices,
+        legal_counts,
+        nontrivial_only=True,
+    )
+
+    assert filtered == [1, 3]
+    assert filter_training_indices(
+        indices,
+        legal_counts,
+        nontrivial_only=False,
+    ) == indices
+
+
+def test_contract_balance_weights_equalize_contract_mass_at_alpha_one() -> None:
+    contract_ids = np.asarray([0, 0, 0, 1], dtype=np.uint8)
+    indices = [0, 1, 2, 3]
+
+    weights = contract_balance_weights(contract_ids, indices, alpha=1.0)
+
+    first_contract_mass = float(weights[:3].sum())
+    second_contract_mass = float(weights[3])
+
+    assert first_contract_mass == pytest.approx(second_contract_mass)
 
 
 def test_split_indices_keeps_games_together() -> None:
