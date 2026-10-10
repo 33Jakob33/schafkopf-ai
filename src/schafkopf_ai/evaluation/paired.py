@@ -20,6 +20,10 @@ from schafkopf_ai.agents.specialist_card_play_agent import SpecialistCardPlayAge
 from schafkopf_ai.game.game_type import GameType
 from schafkopf_ai.game.rules import RAMSCH_RULES
 from schafkopf_ai.runner.round_runner import RoundResult, RoundRunner
+from schafkopf_ai.training.card_play_roles import (
+    CardPlayRole,
+    infer_card_play_role,
+)
 
 AgentLoader = Callable[[Path | None, str], Agent]
 
@@ -56,6 +60,7 @@ class PairedEvaluationResult:
     candidate_checkpoint: Path | None
     overall: PairedStats
     by_contract: dict[GameType, PairedStats]
+    by_role: dict[CardPlayRole, PairedStats]
     reference_wins: int
     candidate_wins: int
     candidate_better: int
@@ -237,6 +242,7 @@ def evaluate_paired_agents(
 
     overall = PairedStats()
     by_contract: dict[GameType, PairedStats] = defaultdict(PairedStats)
+    by_role: dict[CardPlayRole, PairedStats] = defaultdict(PairedStats)
     reference_wins = 0
     candidate_wins = 0
     candidate_better = 0
@@ -271,6 +277,10 @@ def evaluate_paired_agents(
             reference_payment,
             candidate_payment,
         )
+        focal_role = infer_card_play_role(
+            reference_result.game_state.observation_for(focal_seat)
+        )
+        by_role[focal_role].add(reference_payment, candidate_payment)
 
         reference_wins += int(focal_seat in reference_result.game_result.winner_players)
         candidate_wins += int(focal_seat in candidate_result.game_result.winner_players)
@@ -300,6 +310,7 @@ def evaluate_paired_agents(
         candidate_checkpoint=candidate_spec.checkpoint,
         overall=overall,
         by_contract=dict(by_contract),
+        by_role=dict(by_role),
         reference_wins=reference_wins,
         candidate_wins=candidate_wins,
         candidate_better=candidate_better,
