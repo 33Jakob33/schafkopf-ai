@@ -10,14 +10,20 @@ from pathlib import Path
 
 from schafkopf_ai.agents.agent import Agent
 from schafkopf_ai.agents.heuristic_agent import HeuristicAgent
+from schafkopf_ai.agents.heuristic_bidding_random_card_agent import (
+    HeuristicBiddingRandomCardAgent,
+)
 from schafkopf_ai.agents.neural_card_play_agent import NeuralCardPlayAgent
 from schafkopf_ai.agents.ppo_card_play_agent import PPOCardPlayAgent
 from schafkopf_ai.agents.random_agent import RandomAgent
+from schafkopf_ai.agents.specialist_card_play_agent import SpecialistCardPlayAgent
 from schafkopf_ai.game.game_type import GameType
 from schafkopf_ai.game.rules import RAMSCH_RULES
 from schafkopf_ai.runner.round_runner import RoundResult, RoundRunner
 
 AgentLoader = Callable[[Path | None, str], Agent]
+
+OPPONENT_MODES: tuple[str, ...] = ("heuristic-bid-random-card", "random")
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,6 +116,11 @@ def _load_neural(checkpoint: Path | None, device: str) -> Agent:
     return NeuralCardPlayAgent.from_checkpoint(path, device=device)
 
 
+def _load_specialist(checkpoint: Path | None, device: str) -> Agent:
+    path = _checkpoint_required(checkpoint, kind="specialist")
+    return SpecialistCardPlayAgent.from_manifest(path, device=device)
+
+
 def _load_ppo(checkpoint: Path | None, device: str) -> Agent:
     path = _checkpoint_required(checkpoint, kind="ppo")
     return PPOCardPlayAgent.from_checkpoint(
@@ -127,6 +138,7 @@ AGENT_LOADERS: dict[str, AgentLoader] = {
     "dagger": _load_neural,
     "neural": _load_neural,
     "ppo": _load_ppo,
+    "specialist": _load_specialist,
 }
 
 
@@ -168,10 +180,17 @@ def run_paired_variant(
     focal_agent: Agent,
     game_index: int,
     master_seed: int,
+    opponent_mode: str = "heuristic-bid-random-card",
 ) -> RoundResult:
     focal_seat = game_index % 4
     starting_player = (game_index // 4) % 4
     deal_seed = master_seed + game_index * 1_009 + 1
+
+    if opponent_mode not in OPPONENT_MODES:
+        raise ValueError(
+            f"Unsupported opponent mode {opponent_mode!r}; "
+            f"expected one of {OPPONENT_MODES}."
+        )
 
     agents: list[Agent] = []
     for seat in range(4):
@@ -179,7 +198,13 @@ def run_paired_variant(
             agents.append(focal_agent)
         else:
             opponent_seed = master_seed + game_index * 10_007 + seat * 101 + 50_000
-            agents.append(RandomAgent(rng=random.Random(opponent_seed)))
+            opponent_rng = random.Random(opponent_seed)
+            if opponent_mode == "heuristic-bid-random-card":
+                agents.append(
+                    HeuristicBiddingRandomCardAgent(rng=opponent_rng)
+                )
+            else:
+                agents.append(RandomAgent(rng=opponent_rng))
 
     result = RoundRunner(
         agents=agents,
@@ -200,6 +225,7 @@ def evaluate_paired_agents(
     device: str,
     progress_every: int = 0,
     progress_callback: Callable[[int, PairedStats], None] | None = None,
+    opponent_mode: str = "heuristic-bid-random-card",
 ) -> PairedEvaluationResult:
     if games <= 0:
         raise ValueError("games must be greater than zero.")
@@ -223,11 +249,13 @@ def evaluate_paired_agents(
             focal_agent=reference,
             game_index=game_index,
             master_seed=seed,
+            opponent_mode=opponent_mode,
         )
         candidate_result = run_paired_variant(
             focal_agent=candidate,
             game_index=game_index,
             master_seed=seed,
+            opponent_mode=opponent_mode,
         )
 
         if reference_result.contract != candidate_result.contract:
