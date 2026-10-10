@@ -32,6 +32,7 @@ class BehaviorCloningArrays:
     targets: np.ndarray
     game_ids: np.ndarray
     legal_counts: np.ndarray
+    contract_ids: np.ndarray | None = None
 
     @property
     def example_count(self) -> int:
@@ -237,6 +238,9 @@ def load_behavior_cloning_arrays(path: str | Path) -> BehaviorCloningArrays:
             targets=data["targets"],
             game_ids=data["game_ids"],
             legal_counts=data["legal_counts"],
+            contract_ids=(
+                data["contract_ids"] if "contract_ids" in data.files else None
+            ),
         )
 
     _validate_arrays(arrays)
@@ -253,14 +257,17 @@ def save_behavior_cloning_arrays(
     dataset_path = Path(path)
     dataset_path.parent.mkdir(parents=True, exist_ok=True)
 
-    np.savez_compressed(
-        dataset_path,
-        features=arrays.features,
-        legal_masks=arrays.legal_masks,
-        targets=arrays.targets,
-        game_ids=arrays.game_ids,
-        legal_counts=arrays.legal_counts,
-    )
+    payload: dict[str, np.ndarray] = {
+        "features": arrays.features,
+        "legal_masks": arrays.legal_masks,
+        "targets": arrays.targets,
+        "game_ids": arrays.game_ids,
+        "legal_counts": arrays.legal_counts,
+    }
+    if arrays.contract_ids is not None:
+        payload["contract_ids"] = arrays.contract_ids
+
+    np.savez_compressed(dataset_path, **payload)
 
 
 def split_indices_by_game(
@@ -327,6 +334,14 @@ def _validate_arrays(arrays: BehaviorCloningArrays) -> None:
 
     if arrays.targets.shape != (example_count,):
         raise ValueError(f"Unexpected target shape: {arrays.targets.shape}.")
+
+    if arrays.contract_ids is not None:
+        if arrays.contract_ids.shape != (example_count,):
+            raise ValueError(
+                f"Unexpected contract_ids shape: {arrays.contract_ids.shape}."
+            )
+        if np.any(arrays.contract_ids >= 5):
+            raise ValueError("Dataset contains an invalid contract id.")
 
     if example_count == 0:
         raise ValueError("Behavioral-cloning dataset cannot be empty.")
