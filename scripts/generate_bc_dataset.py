@@ -8,19 +8,31 @@ from pathlib import Path
 from typing import Literal
 
 from schafkopf_ai.agents.agent import Agent
+from schafkopf_ai.agents.heuristic_bidding_random_card_agent import (
+    HeuristicBiddingRandomCardAgent,
+)
 from schafkopf_ai.agents.random_agent import RandomAgent
 from schafkopf_ai.game.game_type import GameType
 from schafkopf_ai.game.rules import RAMSCH_RULES
 from schafkopf_ai.runner.round_runner import RoundRunner
 from schafkopf_ai.training.behavior_cloning import save_behavior_cloning_arrays
+from schafkopf_ai.training.card_play_roles import CardPlayRole
 from schafkopf_ai.training.demonstrations import (
     BehaviorCloningCollector,
     RecordingHeuristicAgent,
 )
 from schafkopf_ai.training.observation_encoding import OBSERVATION_VERSIONS
 
-GenerationMode = Literal["all-heuristic", "focal-random"]
-GENERATION_MODES: tuple[GenerationMode, ...] = ("all-heuristic", "focal-random")
+GenerationMode = Literal[
+    "all-heuristic",
+    "focal-random",
+    "heuristic-bid-random-card",
+]
+GENERATION_MODES: tuple[GenerationMode, ...] = (
+    "all-heuristic",
+    "focal-random",
+    "heuristic-bid-random-card",
+)
 
 CARD_PLAYS_PER_GAME = 32
 CARD_PLAYS_PER_FOCAL_GAME = 8
@@ -89,6 +101,49 @@ def _run_focal_random_game(
     return result.contract.game_type
 
 
+def _run_heuristic_bid_random_card_game(
+    *,
+    collector: BehaviorCloningCollector,
+    game_index: int,
+    seed: int,
+) -> GameType:
+    """
+    Record one heuristic focal player against random card-play opponents.
+
+    All four seats use heuristic bidding, so the resulting contract
+    distribution reflects the bidding baseline instead of RandomAgent bidding.
+    Only the three opponents randomize card play.
+    """
+    focal_seat = game_index % 4
+    starting_player = (game_index // 4) % 4
+    deal_seed = seed + game_index * 1_009 + 1
+
+    agents: list[Agent] = []
+    for seat in range(4):
+        if seat == focal_seat:
+            agents.append(
+                RecordingHeuristicAgent(
+                    collector=collector,
+                    game_id=game_index,
+                )
+            )
+        else:
+            opponent_seed = seed + game_index * 10_007 + seat * 101 + 50_000
+            agents.append(
+                HeuristicBiddingRandomCardAgent(
+                    rng=random.Random(opponent_seed),
+                )
+            )
+
+    result = RoundRunner(
+        agents=agents,
+        rules=RAMSCH_RULES,
+        starting_player=starting_player,
+        rng=random.Random(deal_seed),
+    ).run()
+    return result.contract.game_type
+
+
 def run_generation(
     *,
     games: int,
@@ -129,8 +184,14 @@ def run_generation(
                 game_index=game_index,
                 rng=all_heuristic_rng,
             )
-        else:
+        elif generation_mode == "focal-random":
             game_type = _run_focal_random_game(
+                collector=collector,
+                game_index=game_index,
+                seed=seed,
+            )
+        else:
+            game_type = _run_heuristic_bid_random_card_game(
                 collector=collector,
                 game_index=game_index,
                 seed=seed,
@@ -172,6 +233,7 @@ def run_generation(
     print(f"Observation version:        {collector.observation_version}")
     print(f"Feature count:              {arrays.features.shape[1]}")
     print(f"Contract metadata:          {arrays.contract_ids is not None}")
+    print(f"Role metadata:              {arrays.role_ids is not None}")
     print(f"Seed:                       {seed}")
     print(f"Elapsed:                    {elapsed:.3f} s")
     print(f"Output:                     {output}")
@@ -182,13 +244,23 @@ def run_generation(
         count = contract_counts[game_type]
         print(f"{game_type.value:<12} {count:>7,}  ({count / games:>7.2%})")
 
+    if arrays.role_ids is not None:
+        print("\nRecorded decision distribution by specialist role")
+        print("-" * 72)
+        for role in CardPlayRole:
+            count = int((arrays.role_ids == int(role)).sum())
+            print(
+                f"{role.key:<24} {count:>9,}  "
+                f"({count / arrays.example_count:>7.2%})"
+            )
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Generate heuristic card-play demonstrations. The focal-random mode "
-            "matches the paired evaluation setup: one heuristic focal player "
-            "against three RandomAgents."
+            "Generate heuristic card-play demonstrations. "
+            "heuristic-bid-random-card is the realistic card-play mode: all "
+            "players bid heuristically, while only opponent card play is random."
         )
     )
     parser.add_argument(
@@ -227,8 +299,10 @@ def parse_args() -> argparse.Namespace:
         default="all-heuristic",
         help=(
             "all-heuristic records all four heuristic players (32 examples/game); "
-            "focal-random records one rotating heuristic focal player against "
-            "three RandomAgents (8 examples/game) to match evaluation."
+            "focal-random keeps the legacy fully-random opponents; "
+            "heuristic-bid-random-card records one rotating heuristic focal "
+            "player while all seats bid heuristically and opponent card play "
+            "remains random (8 examples/game)."
         ),
     )
     return parser.parse_args()
