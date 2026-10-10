@@ -20,12 +20,18 @@ from schafkopf_ai.training.behavior_cloning import (
     architecture_for_observation_version,
     contract_balance_weights,
     create_card_play_policy,
+    filter_indices_by_role,
     filter_training_indices,
     load_behavior_cloning_arrays,
     mask_illegal_logits,
     split_indices_by_game,
 )
 from schafkopf_ai.training.card_play_encoding import ACTION_COUNT
+from schafkopf_ai.training.card_play_roles import (
+    ROLE_KEYS,
+    CardPlayRole,
+    normalize_card_play_role,
+)
 from schafkopf_ai.training.observation_encoding import (
     infer_observation_version,
     resolve_checkpoint_observation_version,
@@ -120,6 +126,7 @@ def save_checkpoint(
     initialized_from: Path | None,
     nontrivial_only: bool,
     contract_balance_alpha: float,
+    specialist_role: CardPlayRole | None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -143,6 +150,9 @@ def save_checkpoint(
             ),
             "training_nontrivial_only": nontrivial_only,
             "contract_balance_alpha": contract_balance_alpha,
+            "specialist_role": (
+                specialist_role.key if specialist_role is not None else None
+            ),
         },
         path,
     )
@@ -241,6 +251,7 @@ def train(
     gru_hidden_size: int,
     nontrivial_only: bool,
     contract_balance_alpha: float,
+    specialist_role: CardPlayRole | None,
     init_checkpoint: Path | None = None,
 ) -> None:
     if epochs <= 0:
@@ -259,18 +270,43 @@ def train(
     device = resolve_device(device_name)
     arrays = load_behavior_cloning_arrays(dataset_path)
     dataset = BehaviorCloningDataset(arrays)
-    split_train_indices, validation_indices = split_indices_by_game(
+    split_train_indices, split_validation_indices = split_indices_by_game(
         arrays.game_ids,
         validation_fraction=validation_fraction,
         seed=seed,
     )
+
+    if specialist_role is not None:
+        if arrays.role_ids is None:
+            raise ValueError(
+                "Specialist training requires role_ids. Regenerate the dataset "
+                "with the current demonstration collector."
+            )
+        split_train_indices = filter_indices_by_role(
+            split_train_indices,
+            arrays.role_ids,
+            role_id=int(specialist_role),
+        )
+        split_validation_indices = filter_indices_by_role(
+            split_validation_indices,
+            arrays.role_ids,
+            role_id=int(specialist_role),
+        )
+
     train_indices = filter_training_indices(
         split_train_indices,
         arrays.legal_counts,
         nontrivial_only=nontrivial_only,
     )
+    validation_indices = filter_training_indices(
+        split_validation_indices,
+        arrays.legal_counts,
+        nontrivial_only=nontrivial_only,
+    )
     if not train_indices:
         raise ValueError("Training selection contains no examples.")
+    if not validation_indices:
+        raise ValueError("Validation selection contains no examples.")
 
     train_dataset = Subset(dataset, train_indices)
     validation_dataset = Subset(dataset, validation_indices)
@@ -345,6 +381,10 @@ def train(
     print(f"Training examples (split): {len(split_train_indices):,}")
     print(f"Training examples (used):  {len(train_indices):,}")
     print(f"Validation examples:       {len(validation_indices):,}")
+    print(
+        "Specialist role:           "
+        f"{specialist_role.key if specialist_role is not None else 'all'}"
+    )
     print(f"Device:                    {device}")
     print(f"Observation version:       {observation_version}")
     print(f"Observation features:      {input_size}")
@@ -400,6 +440,7 @@ def train(
                 initialized_from=init_checkpoint,
                 nontrivial_only=nontrivial_only,
                 contract_balance_alpha=contract_balance_alpha,
+                specialist_role=specialist_role,
             )
             print(f"  saved new best checkpoint -> {output}")
 
@@ -460,6 +501,15 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--specialist-role",
+        choices=ROLE_KEYS,
+        default=None,
+        help=(
+            "Train one contract/role specialist. Requires role metadata in the "
+            "dataset. Validation is filtered to the same role."
+        ),
+    )
+    parser.add_argument(
         "--contract-balance-alpha",
         type=float,
         default=0.0,
@@ -488,6 +538,11 @@ def main() -> None:
         gru_hidden_size=args.gru_hidden_size,
         nontrivial_only=args.nontrivial_only,
         contract_balance_alpha=args.contract_balance_alpha,
+        specialist_role=(
+            normalize_card_play_role(args.specialist_role)
+            if args.specialist_role is not None
+            else None
+        ),
         init_checkpoint=args.init_checkpoint,
     )
 
