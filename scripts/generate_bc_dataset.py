@@ -5,7 +5,10 @@ import random
 import time
 from collections import Counter
 from pathlib import Path
+from typing import Literal
 
+from schafkopf_ai.agents.agent import Agent
+from schafkopf_ai.agents.random_agent import RandomAgent
 from schafkopf_ai.game.game_type import GameType
 from schafkopf_ai.game.rules import RAMSCH_RULES
 from schafkopf_ai.runner.round_runner import RoundRunner
@@ -16,7 +19,74 @@ from schafkopf_ai.training.demonstrations import (
 )
 from schafkopf_ai.training.observation_encoding import OBSERVATION_VERSIONS
 
+GenerationMode = Literal["all-heuristic", "focal-random"]
+GENERATION_MODES: tuple[GenerationMode, ...] = ("all-heuristic", "focal-random")
+
 CARD_PLAYS_PER_GAME = 32
+CARD_PLAYS_PER_FOCAL_GAME = 8
+
+
+def _run_all_heuristic_game(
+    *,
+    collector: BehaviorCloningCollector,
+    game_index: int,
+    rng: random.Random,
+) -> GameType:
+    agents = tuple(
+        RecordingHeuristicAgent(
+            collector=collector,
+            game_id=game_index,
+        )
+        for _ in range(4)
+    )
+
+    result = RoundRunner(
+        agents=agents,
+        rules=RAMSCH_RULES,
+        starting_player=game_index % 4,
+        rng=rng,
+    ).run()
+    return result.contract.game_type
+
+
+def _run_focal_random_game(
+    *,
+    collector: BehaviorCloningCollector,
+    game_index: int,
+    seed: int,
+) -> GameType:
+    """
+    Record one heuristic focal player against three RandomAgents.
+
+    Seat rotation, starting-player rotation, deal seeding, and opponent seeding
+    intentionally mirror the paired evaluator. This produces demonstrations
+    from the state distribution on which learned focal agents are evaluated,
+    while still using the heuristic as the supervised card-play target.
+    """
+    focal_seat = game_index % 4
+    starting_player = (game_index // 4) % 4
+    deal_seed = seed + game_index * 1_009 + 1
+
+    agents: list[Agent] = []
+    for seat in range(4):
+        if seat == focal_seat:
+            agents.append(
+                RecordingHeuristicAgent(
+                    collector=collector,
+                    game_id=game_index,
+                )
+            )
+        else:
+            opponent_seed = seed + game_index * 10_007 + seat * 101 + 50_000
+            agents.append(RandomAgent(rng=random.Random(opponent_seed)))
+
+    result = RoundRunner(
+        agents=agents,
+        rules=RAMSCH_RULES,
+        starting_player=starting_player,
+        rng=random.Random(deal_seed),
+    ).run()
+    return result.contract.game_type
 
 
 def run_generation(
@@ -26,40 +96,49 @@ def run_generation(
     output: Path,
     progress_every: int,
     observation_version: str,
+    generation_mode: GenerationMode = "all-heuristic",
 ) -> None:
     if games <= 0:
         raise ValueError("games must be greater than zero.")
     if progress_every < 0:
         raise ValueError("progress_every cannot be negative.")
+    if generation_mode not in GENERATION_MODES:
+        raise ValueError(
+            f"Unsupported generation mode {generation_mode!r}; "
+            f"expected one of {GENERATION_MODES}."
+        )
 
+    examples_per_game = (
+        CARD_PLAYS_PER_GAME
+        if generation_mode == "all-heuristic"
+        else CARD_PLAYS_PER_FOCAL_GAME
+    )
     collector = BehaviorCloningCollector(
-        games * CARD_PLAYS_PER_GAME,
+        games * examples_per_game,
         observation_version=observation_version,
     )
-    rng = random.Random(seed)
+    all_heuristic_rng = random.Random(seed)
     contract_counts: Counter[GameType] = Counter()
 
     start = time.perf_counter()
 
     for game_index in range(games):
-        agents = tuple(
-            RecordingHeuristicAgent(
+        if generation_mode == "all-heuristic":
+            game_type = _run_all_heuristic_game(
                 collector=collector,
-                game_id=game_index,
+                game_index=game_index,
+                rng=all_heuristic_rng,
             )
-            for _ in range(4)
-        )
+        else:
+            game_type = _run_focal_random_game(
+                collector=collector,
+                game_index=game_index,
+                seed=seed,
+            )
 
-        result = RoundRunner(
-            agents=agents,
-            rules=RAMSCH_RULES,
-            starting_player=game_index % 4,
-            rng=rng,
-        ).run()
+        contract_counts[game_type] += 1
 
-        contract_counts[result.contract.game_type] += 1
-
-        expected_count = (game_index + 1) * CARD_PLAYS_PER_GAME
+        expected_count = (game_index + 1) * examples_per_game
         if collector.count != expected_count:
             raise RuntimeError(
                 "Unexpected number of recorded card decisions: "
@@ -85,15 +164,17 @@ def run_generation(
 
     print("\nBehavioral-cloning dataset generated")
     print("=" * 72)
-    print(f"Games:                     {games:,}")
-    print(f"Examples:                  {arrays.example_count:,}")
-    print(f"Non-trivial decisions:     {nontrivial:,}")
-    print(f"Non-trivial share:         {nontrivial / arrays.example_count:.2%}")
-    print(f"Observation version:       {collector.observation_version}")
-    print(f"Feature count:             {arrays.features.shape[1]}")
-    print(f"Seed:                      {seed}")
-    print(f"Elapsed:                   {elapsed:.3f} s")
-    print(f"Output:                    {output}")
+    print(f"Generation mode:            {generation_mode}")
+    print(f"Games:                      {games:,}")
+    print(f"Examples:                   {arrays.example_count:,}")
+    print(f"Non-trivial decisions:      {nontrivial:,}")
+    print(f"Non-trivial share:          {nontrivial / arrays.example_count:.2%}")
+    print(f"Observation version:        {collector.observation_version}")
+    print(f"Feature count:              {arrays.features.shape[1]}")
+    print(f"Contract metadata:          {arrays.contract_ids is not None}")
+    print(f"Seed:                       {seed}")
+    print(f"Elapsed:                    {elapsed:.3f} s")
+    print(f"Output:                     {output}")
 
     print("\nContract distribution")
     print("-" * 72)
@@ -105,8 +186,9 @@ def run_generation(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Generate card-play demonstrations by letting four HeuristicAgents "
-            "play complete rounds."
+            "Generate heuristic card-play demonstrations. The focal-random mode "
+            "matches the paired evaluation setup: one heuristic focal player "
+            "against three RandomAgents."
         )
     )
     parser.add_argument(
@@ -139,6 +221,16 @@ def parse_args() -> argparse.Namespace:
         default="v1",
         help="Card-play observation encoding to store (default: v1).",
     )
+    parser.add_argument(
+        "--generation-mode",
+        choices=GENERATION_MODES,
+        default="all-heuristic",
+        help=(
+            "all-heuristic records all four heuristic players (32 examples/game); "
+            "focal-random records one rotating heuristic focal player against "
+            "three RandomAgents (8 examples/game) to match evaluation."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -150,6 +242,7 @@ def main() -> None:
         output=args.output,
         progress_every=args.progress_every,
         observation_version=args.observation_version,
+        generation_mode=args.generation_mode,
     )
 
 
