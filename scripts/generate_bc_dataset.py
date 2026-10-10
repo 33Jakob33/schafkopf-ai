@@ -249,10 +249,7 @@ def run_generation(
         print("-" * 72)
         for role in CardPlayRole:
             count = int((arrays.role_ids == int(role)).sum())
-            print(
-                f"{role.key:<24} {count:>9,}  "
-                f"({count / arrays.example_count:>7.2%})"
-            )
+            print(f"{role.key:<24} {count:>9,}  ({count / arrays.example_count:>7.2%})")
 
 
 def parse_args() -> argparse.Namespace:
