@@ -10,11 +10,11 @@ from schafkopf_ai.game.game_type import GameType
 from schafkopf_ai.game.rules import RAMSCH_RULES
 from schafkopf_ai.runner.round_runner import RoundRunner
 from schafkopf_ai.training.behavior_cloning import save_behavior_cloning_arrays
-from schafkopf_ai.training.observation_encoding import OBSERVATION_VERSIONS
 from schafkopf_ai.training.demonstrations import (
     BehaviorCloningCollector,
     RecordingHeuristicAgent,
 )
+from schafkopf_ai.training.observation_encoding import OBSERVATION_VERSIONS
 
 CARD_PLAYS_PER_GAME = 32
 
