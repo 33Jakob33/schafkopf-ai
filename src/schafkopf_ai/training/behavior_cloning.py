@@ -306,6 +306,55 @@ def split_indices_by_game(
     return train_indices, validation_indices
 
 
+
+
+def filter_training_indices(
+    indices: list[int],
+    legal_counts: np.ndarray,
+    *,
+    nontrivial_only: bool,
+) -> list[int]:
+    """Optionally drop forced moves, which carry zero masked-CE learning signal."""
+    if not nontrivial_only:
+        return list(indices)
+    return [index for index in indices if int(legal_counts[index]) > 1]
+
+
+def contract_balance_weights(
+    contract_ids: np.ndarray,
+    indices: list[int],
+    *,
+    alpha: float,
+) -> np.ndarray:
+    """
+    Return per-example weights for tempered contract rebalancing.
+
+    alpha=0 preserves the natural dataset distribution. alpha=1 gives each
+    observed contract equal expected sampling mass. Values in between (for
+    example 0.5) moderately upweight rare contracts without forcing a fully
+    uniform contract distribution.
+    """
+    if not 0.0 <= alpha <= 1.0:
+        raise ValueError("Contract balance alpha must be between 0 and 1.")
+    if not indices:
+        raise ValueError("Cannot compute sampling weights for no examples.")
+
+    selected = contract_ids[np.asarray(indices, dtype=np.int64)].astype(np.int64)
+    counts = np.bincount(selected, minlength=5)
+
+    weights = np.empty(len(indices), dtype=np.float64)
+    for position, contract_id in enumerate(selected.tolist()):
+        count = int(counts[contract_id])
+        if count <= 0:
+            raise RuntimeError("Observed contract has zero frequency.")
+        weights[position] = count ** (-alpha)
+
+    mean_weight = float(weights.mean())
+    if mean_weight <= 0.0:
+        raise RuntimeError("Contract sampling weights have non-positive mean.")
+    return weights / mean_weight
+
+
 def _validate_arrays(arrays: BehaviorCloningArrays) -> None:
     example_count = arrays.example_count
 
