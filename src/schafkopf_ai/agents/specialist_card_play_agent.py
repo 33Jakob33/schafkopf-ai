@@ -76,6 +76,22 @@ class SpecialistCardPlayAgent(Agent):
                 checkpoint = path.parent / checkpoint
 
             role = normalize_card_play_role(role_key)
+            metadata = torch.load(
+                checkpoint,
+                map_location="cpu",
+                weights_only=True,
+            )
+            if not isinstance(metadata, dict):
+                raise TypeError(
+                    f"Specialist checkpoint {checkpoint} must contain a dictionary."
+                )
+            checkpoint_role = metadata.get("specialist_role")
+            if checkpoint_role != role.key:
+                raise ValueError(
+                    f"Checkpoint {checkpoint} is tagged for role "
+                    f"{checkpoint_role!r}, expected {role.key!r}."
+                )
+
             agent = NeuralCardPlayAgent.from_checkpoint(
                 checkpoint,
                 device=device,
