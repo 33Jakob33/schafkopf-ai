@@ -257,17 +257,25 @@ def save_behavior_cloning_arrays(
     dataset_path = Path(path)
     dataset_path.parent.mkdir(parents=True, exist_ok=True)
 
-    payload: dict[str, np.ndarray] = {
-        "features": arrays.features,
-        "legal_masks": arrays.legal_masks,
-        "targets": arrays.targets,
-        "game_ids": arrays.game_ids,
-        "legal_counts": arrays.legal_counts,
-    }
-    if arrays.contract_ids is not None:
-        payload["contract_ids"] = arrays.contract_ids
-
-    np.savez_compressed(dataset_path, **payload)
+    if arrays.contract_ids is None:
+        np.savez_compressed(
+            dataset_path,
+            features=arrays.features,
+            legal_masks=arrays.legal_masks,
+            targets=arrays.targets,
+            game_ids=arrays.game_ids,
+            legal_counts=arrays.legal_counts,
+        )
+    else:
+        np.savez_compressed(
+            dataset_path,
+            features=arrays.features,
+            legal_masks=arrays.legal_masks,
+            targets=arrays.targets,
+            game_ids=arrays.game_ids,
+            legal_counts=arrays.legal_counts,
+            contract_ids=arrays.contract_ids,
+        )
 
 
 def split_indices_by_game(
