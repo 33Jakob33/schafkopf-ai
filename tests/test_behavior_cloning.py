@@ -11,6 +11,7 @@ from schafkopf_ai.game.observation import PlayerObservation
 from schafkopf_ai.training.behavior_cloning import (
     BehaviorCloningArrays,
     CardPlayPolicyNetwork,
+    GRUCardPlayPolicyNetwork,
     load_behavior_cloning_arrays,
     mask_illegal_logits,
     save_behavior_cloning_arrays,
@@ -20,6 +21,10 @@ from schafkopf_ai.training.card_play_encoding import (
     ACTION_COUNT,
     OBSERVATION_FEATURE_SIZE,
     card_to_action_index,
+)
+from schafkopf_ai.training.card_play_encoding_v3 import (
+    HISTORY_STEP_FEATURE_SIZE,
+    OBSERVATION_V3_FEATURE_SIZE,
 )
 from schafkopf_ai.training.demonstrations import BehaviorCloningCollector
 
@@ -133,3 +138,47 @@ def test_neural_agent_masks_illegal_cards() -> None:
     chosen = agent.choose_card(observation, (first, second))
 
     assert chosen == first
+
+
+def test_gru_card_play_policy_network_has_32_logits() -> None:
+    model = GRUCardPlayPolicyNetwork(
+        hidden_sizes=(32, 24),
+        gru_hidden_size=16,
+    )
+    features = torch.zeros((3, OBSERVATION_V3_FEATURE_SIZE), dtype=torch.float32)
+
+    # Add one real public-history step to one batch item so both empty and
+    # non-empty sequence paths are exercised.
+    history_offset = OBSERVATION_V3_FEATURE_SIZE - 31 * HISTORY_STEP_FEATURE_SIZE
+    features[1, history_offset] = 1.0
+
+    logits = model(features)
+
+    assert logits.shape == (3, ACTION_COUNT)
+    assert model.observation_version == "v3"
+    assert model.architecture == "gru_v1"
+
+
+def test_neural_agent_loads_gru_checkpoint(tmp_path: Path) -> None:
+    model = GRUCardPlayPolicyNetwork(
+        hidden_sizes=(32, 24),
+        gru_hidden_size=16,
+    )
+    checkpoint = tmp_path / "gru.pt"
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "architecture": model.architecture,
+            "input_size": model.input_size,
+            "hidden_sizes": model.hidden_sizes,
+            "gru_hidden_size": model.gru_hidden_size,
+            "action_count": model.action_count,
+            "observation_version": model.observation_version,
+        },
+        checkpoint,
+    )
+
+    agent = NeuralCardPlayAgent.from_checkpoint(checkpoint)
+
+    assert agent.observation_version == "v3"
+    assert isinstance(agent.model, GRUCardPlayPolicyNetwork)
