@@ -14,6 +14,7 @@ from schafkopf_ai.evaluation.paired import (
     evaluate_paired_agents,
 )
 from schafkopf_ai.game.game_type import GameType
+from schafkopf_ai.training.card_play_roles import CardPlayRole
 
 
 def _default_name(kind: str) -> str:
@@ -136,6 +137,24 @@ def run_evaluation(
             f"cand={statistics.fmean(stats.candidate_payments):>+8.3f}  "
             f"delta={statistics.fmean(stats.deltas):>+8.3f}  "
             f"CI=[{contract_ci_low:+.3f}, {contract_ci_high:+.3f}]"
+        )
+
+    print("\nPaired result by focal role")
+    print("-" * 96)
+    for role in CardPlayRole:
+        stats = result.by_role.get(role)
+        if stats is None or not stats.deltas:
+            print(f"{role.key:<24} no games")
+            continue
+
+        role_ci_low, role_ci_high = confidence_interval_95(stats.deltas)
+        print(
+            f"{role.key:<24} "
+            f"n={len(stats.deltas):>7,}  "
+            f"ref={statistics.fmean(stats.reference_payments):>+8.3f}  "
+            f"cand={statistics.fmean(stats.candidate_payments):>+8.3f}  "
+            f"delta={statistics.fmean(stats.deltas):>+8.3f}  "
+            f"CI=[{role_ci_low:+.3f}, {role_ci_high:+.3f}]"
         )
 
 
