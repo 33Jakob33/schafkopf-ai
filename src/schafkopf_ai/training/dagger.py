@@ -125,4 +125,12 @@ def aggregate_dagger_arrays(
             if base.contract_ids is not None and additions.contract_ids is not None
             else None
         ),
+        role_ids=(
+            np.concatenate(
+                (base.role_ids, additions.role_ids),
+                axis=0,
+            )
+            if base.role_ids is not None and additions.role_ids is not None
+            else None
+        ),
     )
