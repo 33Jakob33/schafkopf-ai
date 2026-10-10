@@ -10,7 +10,8 @@ from schafkopf_ai.game.bidding import BiddingAction, BiddingObservation
 from schafkopf_ai.game.card import Card
 from schafkopf_ai.game.observation import PlayerObservation
 from schafkopf_ai.training.behavior_cloning import (
-    CardPlayPolicyNetwork,
+    architecture_for_observation_version,
+    create_card_play_policy,
     mask_illegal_logits,
 )
 from schafkopf_ai.training.card_play_encoding import (
@@ -83,20 +84,34 @@ class NeuralCardPlayAgent(Agent):
             raise ValueError("Checkpoint hidden_sizes must contain exactly two values.")
 
         hidden_sizes = (int(hidden_sizes_raw[0]), int(hidden_sizes_raw[1]))
+        gru_hidden_size = int(checkpoint.get("gru_hidden_size") or 128)
 
         observation_version = resolve_checkpoint_observation_version(
             input_size=input_size,
             explicit_version=checkpoint.get("observation_version"),
         )
+        expected_architecture = architecture_for_observation_version(
+            observation_version
+        )
+        architecture = checkpoint.get("architecture", expected_architecture)
+        if not isinstance(architecture, str):
+            raise TypeError("Checkpoint architecture must be a string.")
+        if architecture != expected_architecture:
+            raise ValueError(
+                "Checkpoint architecture does not match its observation version: "
+                f"{architecture} != {expected_architecture}."
+            )
+
         if action_count != ACTION_COUNT:
             raise ValueError(
                 "Checkpoint action count does not match the current card mapping: "
                 f"{action_count} != {ACTION_COUNT}."
             )
 
-        model = CardPlayPolicyNetwork(
+        model = create_card_play_policy(
             input_size=input_size,
             hidden_sizes=hidden_sizes,
+            gru_hidden_size=gru_hidden_size,
             action_count=action_count,
         )
         if model.observation_version != observation_version:
