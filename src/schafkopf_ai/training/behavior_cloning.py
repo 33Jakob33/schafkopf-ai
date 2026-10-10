@@ -10,7 +10,13 @@ import torch
 from torch import Tensor, nn
 from torch.utils.data import Dataset
 
-from .card_play_encoding import ACTION_COUNT, OBSERVATION_FEATURE_SIZE
+from .card_play_encoding import ACTION_COUNT, CARD_COUNT, OBSERVATION_FEATURE_SIZE
+from .card_play_encoding_v2 import OBSERVATION_V2_FEATURE_SIZE
+from .card_play_encoding_v3 import (
+    HISTORY_STEP_FEATURE_SIZE,
+    MAX_PUBLIC_HISTORY_PLAYS,
+    OBSERVATION_V3_FEATURE_SIZE,
+)
 from .observation_encoding import (
     infer_observation_version,
     try_infer_observation_version,
@@ -51,6 +57,8 @@ class BehaviorCloningDataset(Dataset[tuple[Tensor, Tensor, Tensor]]):
 class CardPlayPolicyNetwork(nn.Module):
     """Simple MLP policy over the 32 physical card actions."""
 
+    architecture = "mlp_v1"
+
     def __init__(
         self,
         *,
@@ -76,6 +84,123 @@ class CardPlayPolicyNetwork(nn.Module):
 
     def forward(self, features: Tensor) -> Tensor:
         return cast(Tensor, self.network(features))
+
+
+class GRUCardPlayPolicyNetwork(nn.Module):
+    """
+    Hybrid V3 policy with a structured V2 branch and a temporal GRU branch.
+
+    The first 222 inputs are the unchanged V2 features. The remaining inputs
+    contain 31 zero-padded public-play steps. The GRU reads only public history;
+    its final valid hidden state is fused with the structured V2 representation.
+    """
+
+    architecture = "gru_v1"
+
+    def __init__(
+        self,
+        *,
+        input_size: int = OBSERVATION_V3_FEATURE_SIZE,
+        hidden_sizes: tuple[int, int] = (512, 256),
+        gru_hidden_size: int = 128,
+        action_count: int = ACTION_COUNT,
+    ) -> None:
+        super().__init__()
+
+        if input_size != OBSERVATION_V3_FEATURE_SIZE:
+            raise ValueError(
+                "GRU policy requires the V3 observation size: "
+                f"{input_size} != {OBSERVATION_V3_FEATURE_SIZE}."
+            )
+        if gru_hidden_size <= 0:
+            raise ValueError("GRU hidden size must be greater than zero.")
+
+        structured_hidden_size, fusion_hidden_size = hidden_sizes
+
+        self.input_size = input_size
+        self.hidden_sizes = hidden_sizes
+        self.gru_hidden_size = gru_hidden_size
+        self.action_count = action_count
+        self.observation_version = "v3"
+
+        self.structured_encoder = nn.Sequential(
+            nn.Linear(OBSERVATION_V2_FEATURE_SIZE, structured_hidden_size),
+            nn.ReLU(),
+        )
+        self.history_gru = nn.GRU(
+            input_size=HISTORY_STEP_FEATURE_SIZE,
+            hidden_size=gru_hidden_size,
+            batch_first=True,
+        )
+        self.fusion = nn.Sequential(
+            nn.Linear(structured_hidden_size + gru_hidden_size, fusion_hidden_size),
+            nn.ReLU(),
+            nn.Linear(fusion_hidden_size, action_count),
+        )
+
+    def forward(self, features: Tensor) -> Tensor:
+        if features.ndim != 2 or features.shape[1] != self.input_size:
+            raise ValueError(
+                "GRU policy expects a two-dimensional V3 feature batch with "
+                f"width {self.input_size}; got {tuple(features.shape)}."
+            )
+
+        structured = features[:, :OBSERVATION_V2_FEATURE_SIZE]
+        history_flat = features[:, OBSERVATION_V2_FEATURE_SIZE:]
+        history = history_flat.reshape(
+            -1,
+            MAX_PUBLIC_HISTORY_PLAYS,
+            HISTORY_STEP_FEATURE_SIZE,
+        )
+
+        structured_hidden = self.structured_encoder(structured)
+        history_outputs, _ = self.history_gru(history)
+
+        # Every real history step has exactly one active card bit. This lets us
+        # recover each unpadded sequence length without storing another feature.
+        played = history[:, :, :CARD_COUNT].abs().sum(dim=2) > 0
+        lengths = played.sum(dim=1)
+        last_indices = lengths.clamp_min(1) - 1
+        batch_indices = torch.arange(features.shape[0], device=features.device)
+        history_hidden = history_outputs[batch_indices, last_indices]
+        history_hidden = history_hidden * (lengths > 0).unsqueeze(1)
+
+        fused = torch.cat((structured_hidden, history_hidden), dim=1)
+        return cast(Tensor, self.fusion(fused))
+
+
+CardPlayPolicyModel = CardPlayPolicyNetwork | GRUCardPlayPolicyNetwork
+
+
+def architecture_for_observation_version(version: str) -> str:
+    """Return the default policy architecture for an observation encoding."""
+    if version == "v3":
+        return GRUCardPlayPolicyNetwork.architecture
+    return CardPlayPolicyNetwork.architecture
+
+
+def create_card_play_policy(
+    *,
+    input_size: int,
+    hidden_sizes: tuple[int, int] = (512, 256),
+    gru_hidden_size: int = 128,
+    action_count: int = ACTION_COUNT,
+) -> CardPlayPolicyModel:
+    """Create the policy architecture implied by the observation version."""
+    version = infer_observation_version(input_size)
+    if version == "v3":
+        return GRUCardPlayPolicyNetwork(
+            input_size=input_size,
+            hidden_sizes=hidden_sizes,
+            gru_hidden_size=gru_hidden_size,
+            action_count=action_count,
+        )
+
+    return CardPlayPolicyNetwork(
+        input_size=input_size,
+        hidden_sizes=hidden_sizes,
+        action_count=action_count,
+    )
 
 
 def mask_illegal_logits(logits: Tensor, legal_mask: Tensor) -> Tensor:
