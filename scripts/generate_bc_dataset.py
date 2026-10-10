@@ -10,6 +10,7 @@ from schafkopf_ai.game.game_type import GameType
 from schafkopf_ai.game.rules import RAMSCH_RULES
 from schafkopf_ai.runner.round_runner import RoundRunner
 from schafkopf_ai.training.behavior_cloning import save_behavior_cloning_arrays
+from schafkopf_ai.training.observation_encoding import OBSERVATION_VERSIONS
 from schafkopf_ai.training.demonstrations import (
     BehaviorCloningCollector,
     RecordingHeuristicAgent,
@@ -134,7 +135,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--observation-version",
-        choices=("v1", "v2"),
+        choices=OBSERVATION_VERSIONS,
         default="v1",
         help="Card-play observation encoding to store (default: v1).",
     )
