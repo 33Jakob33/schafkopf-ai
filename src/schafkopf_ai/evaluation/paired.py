@@ -205,9 +205,7 @@ def run_paired_variant(
             opponent_seed = master_seed + game_index * 10_007 + seat * 101 + 50_000
             opponent_rng = random.Random(opponent_seed)
             if opponent_mode == "heuristic-bid-random-card":
-                agents.append(
-                    HeuristicBiddingRandomCardAgent(rng=opponent_rng)
-                )
+                agents.append(HeuristicBiddingRandomCardAgent(rng=opponent_rng))
             else:
                 agents.append(RandomAgent(rng=opponent_rng))
 
