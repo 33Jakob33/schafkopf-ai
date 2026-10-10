@@ -306,8 +306,6 @@ def split_indices_by_game(
     return train_indices, validation_indices
 
 
-
-
 def filter_training_indices(
     indices: list[int],
     legal_counts: np.ndarray,
