@@ -57,8 +57,7 @@ class SpecialistCardPlayAgent(Agent):
             raise TypeError("Specialist manifest must contain a JSON object.")
         if manifest.get("format") != SPECIALIST_MANIFEST_FORMAT:
             raise ValueError(
-                "Unsupported specialist manifest format: "
-                f"{manifest.get('format')!r}."
+                f"Unsupported specialist manifest format: {manifest.get('format')!r}."
             )
 
         raw_roles = manifest.get("roles")
