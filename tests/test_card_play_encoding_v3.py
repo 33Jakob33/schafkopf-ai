@@ -27,9 +27,7 @@ def _observation() -> PlayerObservation:
         ),
         contract=GameContract(GameType.WENZ, declarer=3),
         current_player=2,
-        current_trick=(
-            TrickPlay(3, Card(Suit.GRAS, Rank.TEN)),
-        ),
+        current_trick=(TrickPlay(3, Card(Suit.GRAS, Rank.TEN)),),
         completed_tricks=(
             (
                 TrickPlay(2, Card(Suit.SCHELLEN, Rank.ACE)),
@@ -61,9 +59,9 @@ def test_v3_public_history_preserves_play_order() -> None:
     history = encode_public_history(observation)
 
     first_base = 0
-    assert history[
-        first_base + card_to_action_index(Card(Suit.SCHELLEN, Rank.ACE))
-    ] == 1.0
+    assert (
+        history[first_base + card_to_action_index(Card(Suit.SCHELLEN, Rank.ACE))] == 1.0
+    )
 
     # Observer is player 2, so absolute player 2 is relative player 0.
     assert history[first_base + CARD_COUNT] == 1.0
@@ -73,9 +71,7 @@ def test_v3_public_history_preserves_play_order() -> None:
     assert history[first_base + position_offset] == 1.0
 
     fifth_base = 4 * HISTORY_STEP_FEATURE_SIZE
-    assert history[
-        fifth_base + card_to_action_index(Card(Suit.GRAS, Rank.TEN))
-    ] == 1.0
+    assert history[fifth_base + card_to_action_index(Card(Suit.GRAS, Rank.TEN))] == 1.0
 
     # Absolute player 3 is relative player 1 from observer 2.
     assert history[fifth_base + CARD_COUNT + 1] == 1.0
