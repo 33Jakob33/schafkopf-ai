@@ -33,6 +33,7 @@ class BehaviorCloningArrays:
     game_ids: np.ndarray
     legal_counts: np.ndarray
     contract_ids: np.ndarray | None = None
+    role_ids: np.ndarray | None = None
 
     @property
     def example_count(self) -> int:
@@ -241,6 +242,7 @@ def load_behavior_cloning_arrays(path: str | Path) -> BehaviorCloningArrays:
             contract_ids=(
                 data["contract_ids"] if "contract_ids" in data.files else None
             ),
+            role_ids=data["role_ids"] if "role_ids" in data.files else None,
         )
 
     _validate_arrays(arrays)
@@ -257,25 +259,19 @@ def save_behavior_cloning_arrays(
     dataset_path = Path(path)
     dataset_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if arrays.contract_ids is None:
-        np.savez_compressed(
-            dataset_path,
-            features=arrays.features,
-            legal_masks=arrays.legal_masks,
-            targets=arrays.targets,
-            game_ids=arrays.game_ids,
-            legal_counts=arrays.legal_counts,
-        )
-    else:
-        np.savez_compressed(
-            dataset_path,
-            features=arrays.features,
-            legal_masks=arrays.legal_masks,
-            targets=arrays.targets,
-            game_ids=arrays.game_ids,
-            legal_counts=arrays.legal_counts,
-            contract_ids=arrays.contract_ids,
-        )
+    payload: dict[str, np.ndarray] = {
+        "features": arrays.features,
+        "legal_masks": arrays.legal_masks,
+        "targets": arrays.targets,
+        "game_ids": arrays.game_ids,
+        "legal_counts": arrays.legal_counts,
+    }
+    if arrays.contract_ids is not None:
+        payload["contract_ids"] = arrays.contract_ids
+    if arrays.role_ids is not None:
+        payload["role_ids"] = arrays.role_ids
+
+    np.savez_compressed(dataset_path, **payload)  # type: ignore[arg-type]
 
 
 def split_indices_by_game(
@@ -312,6 +308,18 @@ def split_indices_by_game(
             train_indices.append(index)
 
     return train_indices, validation_indices
+
+
+
+
+def filter_indices_by_role(
+    indices: list[int],
+    role_ids: np.ndarray,
+    *,
+    role_id: int,
+) -> list[int]:
+    """Select examples belonging to one specialist role."""
+    return [index for index in indices if int(role_ids[index]) == role_id]
 
 
 def filter_training_indices(
@@ -397,6 +405,12 @@ def _validate_arrays(arrays: BehaviorCloningArrays) -> None:
             )
         if np.any(arrays.contract_ids >= 5):
             raise ValueError("Dataset contains an invalid contract id.")
+
+    if arrays.role_ids is not None:
+        if arrays.role_ids.shape != (example_count,):
+            raise ValueError(f"Unexpected role_ids shape: {arrays.role_ids.shape}.")
+        if np.any(arrays.role_ids >= 8):
+            raise ValueError("Dataset contains an invalid specialist role id.")
 
     if example_count == 0:
         raise ValueError("Behavioral-cloning dataset cannot be empty.")
