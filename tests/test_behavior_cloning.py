@@ -14,6 +14,7 @@ from schafkopf_ai.training.behavior_cloning import (
     CardPlayPolicyNetwork,
     GRUCardPlayPolicyNetwork,
     contract_balance_weights,
+    filter_indices_by_role,
     filter_training_indices,
     load_behavior_cloning_arrays,
     mask_illegal_logits,
@@ -85,6 +86,8 @@ def test_collector_records_heuristic_target_as_legal_action() -> None:
     assert arrays.legal_counts.tolist() == [2]
     assert arrays.contract_ids is not None
     assert arrays.contract_ids.tolist() == [2]
+    assert arrays.role_ids is not None
+    assert arrays.role_ids.tolist() == [5]
     assert int(arrays.targets[0]) == card_to_action_index(second)
     assert arrays.legal_masks[0, card_to_action_index(second)]
 
@@ -111,6 +114,7 @@ def test_behavior_cloning_dataset_round_trip(tmp_path: Path) -> None:
     assert np.array_equal(loaded.targets, arrays.targets)
     assert np.array_equal(loaded.game_ids, arrays.game_ids)
     assert loaded.contract_ids is None
+    assert loaded.role_ids is None
 
 
 def test_behavior_cloning_dataset_round_trip_preserves_contract_ids(
@@ -126,6 +130,7 @@ def test_behavior_cloning_dataset_round_trip_preserves_contract_ids(
         game_ids=np.arange(4, dtype=np.uint32),
         legal_counts=np.ones(4, dtype=np.uint8),
         contract_ids=np.asarray([0, 1, 2, 4], dtype=np.uint8),
+        role_ids=np.asarray([0, 3, 5, 7], dtype=np.uint8),
     )
     path = tmp_path / "bc_contracts.npz"
 
@@ -135,6 +140,18 @@ def test_behavior_cloning_dataset_round_trip_preserves_contract_ids(
     assert loaded.contract_ids is not None
     assert arrays.contract_ids is not None
     assert np.array_equal(loaded.contract_ids, arrays.contract_ids)
+    assert loaded.role_ids is not None
+    assert arrays.role_ids is not None
+    assert np.array_equal(loaded.role_ids, arrays.role_ids)
+
+
+def test_filter_indices_by_role_selects_only_requested_role() -> None:
+    indices = [0, 1, 2, 3, 4]
+    role_ids = np.asarray([0, 3, 3, 7, 0], dtype=np.uint8)
+
+    filtered = filter_indices_by_role(indices, role_ids, role_id=3)
+
+    assert filtered == [1, 2]
 
 
 def test_filter_training_indices_can_drop_forced_moves() -> None:
