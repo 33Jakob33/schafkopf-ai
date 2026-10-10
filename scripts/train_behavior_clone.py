@@ -16,7 +16,9 @@ from torch.utils.data import DataLoader, Subset
 
 from schafkopf_ai.training.behavior_cloning import (
     BehaviorCloningDataset,
-    CardPlayPolicyNetwork,
+    CardPlayPolicyModel,
+    architecture_for_observation_version,
+    create_card_play_policy,
     load_behavior_cloning_arrays,
     mask_illegal_logits,
     split_indices_by_game,
@@ -49,7 +51,7 @@ def resolve_device(requested: str) -> torch.device:
 
 def run_epoch(
     *,
-    model: CardPlayPolicyNetwork,
+    model: CardPlayPolicyModel,
     loader: DataLoader[tuple[Tensor, Tensor, Tensor]],
     device: torch.device,
     optimizer: AdamW | None,
@@ -108,7 +110,7 @@ def run_epoch(
 def save_checkpoint(
     *,
     path: Path,
-    model: CardPlayPolicyNetwork,
+    model: CardPlayPolicyModel,
     epoch: int,
     validation_metrics: EpochMetrics,
     dataset_path: Path,
@@ -120,8 +122,10 @@ def save_checkpoint(
     torch.save(
         {
             "model_state_dict": model.state_dict(),
+            "architecture": model.architecture,
             "input_size": model.input_size,
             "hidden_sizes": model.hidden_sizes,
+            "gru_hidden_size": getattr(model, "gru_hidden_size", None),
             "action_count": model.action_count,
             "observation_version": model.observation_version,
             "epoch": epoch,
@@ -140,7 +144,7 @@ def save_checkpoint(
 
 def load_initial_weights(
     *,
-    model: CardPlayPolicyNetwork,
+    model: CardPlayPolicyModel,
     checkpoint_path: Path,
     device: torch.device,
 ) -> None:
@@ -166,6 +170,13 @@ def load_initial_weights(
         input_size=input_size,
         explicit_version=checkpoint.get("observation_version"),
     )
+    checkpoint_architecture = checkpoint.get(
+        "architecture",
+        architecture_for_observation_version(checkpoint_version),
+    )
+    if not isinstance(checkpoint_architecture, str):
+        raise TypeError("Initial checkpoint architecture must be a string.")
+
     if input_size != model.input_size:
         raise ValueError(
             "Initial checkpoint observation size does not match the model: "
@@ -175,6 +186,11 @@ def load_initial_weights(
         raise ValueError(
             "Initial checkpoint observation version does not match the model: "
             f"{checkpoint_version} != {model.observation_version}."
+        )
+    if checkpoint_architecture != model.architecture:
+        raise ValueError(
+            "Initial checkpoint architecture does not match the model: "
+            f"{checkpoint_architecture} != {model.architecture}."
         )
     if action_count != model.action_count:
         raise ValueError(
@@ -186,6 +202,16 @@ def load_initial_weights(
             "Initial checkpoint hidden sizes do not match the model: "
             f"{hidden_sizes} != {model.hidden_sizes}."
         )
+
+    if model.architecture == "gru_v1":
+        checkpoint_gru_hidden = int(
+            checkpoint.get("gru_hidden_size", model.gru_hidden_size)
+        )
+        if checkpoint_gru_hidden != model.gru_hidden_size:
+            raise ValueError(
+                "Initial checkpoint GRU hidden size does not match the model: "
+                f"{checkpoint_gru_hidden} != {model.gru_hidden_size}."
+            )
 
     state_dict = checkpoint.get("model_state_dict")
     if not isinstance(state_dict, dict):
@@ -206,6 +232,7 @@ def train(
     seed: int,
     device_name: str,
     hidden_sizes: tuple[int, int],
+    gru_hidden_size: int,
     init_checkpoint: Path | None = None,
 ) -> None:
     if epochs <= 0:
@@ -248,9 +275,10 @@ def train(
 
     input_size = int(arrays.features.shape[1])
     observation_version = infer_observation_version(input_size)
-    model = CardPlayPolicyNetwork(
+    model = create_card_play_policy(
         input_size=input_size,
         hidden_sizes=hidden_sizes,
+        gru_hidden_size=gru_hidden_size,
         action_count=ACTION_COUNT,
     ).to(device)
 
@@ -279,7 +307,10 @@ def train(
     print(f"Device:                    {device}")
     print(f"Observation version:       {observation_version}")
     print(f"Observation features:      {input_size}")
+    print(f"Architecture:              {model.architecture}")
     print(f"Hidden sizes:              {hidden_sizes}")
+    if model.architecture == "gru_v1":
+        print(f"GRU hidden size:           {model.gru_hidden_size}")
     print(f"Batch size:                {batch_size}")
     print(f"Learning rate:             {learning_rate:g}")
     print(
@@ -336,7 +367,8 @@ def train(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Train an MLP on heuristic demonstrations or an aggregated DAgger dataset."
+            "Train a card-play policy on heuristic demonstrations or an "
+            "aggregated DAgger dataset. V3 datasets use the hybrid GRU policy."
         )
     )
     parser.add_argument(
@@ -368,6 +400,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--hidden-1", type=int, default=512)
     parser.add_argument("--hidden-2", type=int, default=256)
+    parser.add_argument(
+        "--gru-hidden-size",
+        type=int,
+        default=128,
+        help="Hidden size of the V3 public-history GRU (default: 128).",
+    )
     return parser.parse_args()
 
 
@@ -384,6 +422,7 @@ def main() -> None:
         seed=args.seed,
         device_name=args.device,
         hidden_sizes=(args.hidden_1, args.hidden_2),
+        gru_hidden_size=args.gru_hidden_size,
         init_checkpoint=args.init_checkpoint,
     )
 
