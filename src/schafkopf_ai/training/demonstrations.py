@@ -8,6 +8,7 @@ from schafkopf_ai.game.observation import PlayerObservation
 
 from .behavior_cloning import BehaviorCloningArrays
 from .card_play_encoding import ACTION_COUNT, GAME_TYPE_ORDER, card_to_action_index
+from .card_play_roles import infer_card_play_role
 from .observation_encoding import (
     ObservationVersion,
     encode_card_play_for_version,
@@ -45,6 +46,7 @@ class BehaviorCloningCollector:
         self.game_ids = np.empty(expected_examples, dtype=np.uint32)
         self.legal_counts = np.empty(expected_examples, dtype=np.uint8)
         self.contract_ids = np.empty(expected_examples, dtype=np.uint8)
+        self.role_ids = np.empty(expected_examples, dtype=np.uint8)
 
         self._expected_examples = expected_examples
         self._count = 0
@@ -88,6 +90,7 @@ class BehaviorCloningCollector:
         self.game_ids[index] = game_id
         self.legal_counts[index] = len(legal_cards)
         self.contract_ids[index] = GAME_TYPE_ORDER.index(observation.contract.game_type)
+        self.role_ids[index] = int(infer_card_play_role(observation))
         self._count += 1
 
     def arrays(self) -> BehaviorCloningArrays:
@@ -102,6 +105,7 @@ class BehaviorCloningCollector:
             game_ids=self.game_ids[: self._count],
             legal_counts=self.legal_counts[: self._count],
             contract_ids=self.contract_ids[: self._count],
+            role_ids=self.role_ids[: self._count],
         )
 
 
