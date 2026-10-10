@@ -16,9 +16,14 @@ from .card_play_encoding_v2 import (
     encode_card_play_v2,
     encode_player_observation_v2,
 )
+from .card_play_encoding_v3 import (
+    OBSERVATION_V3_FEATURE_SIZE,
+    encode_card_play_v3,
+    encode_player_observation_v3,
+)
 
-ObservationVersion = Literal["v1", "v2"]
-OBSERVATION_VERSIONS: tuple[ObservationVersion, ...] = ("v1", "v2")
+ObservationVersion = Literal["v1", "v2", "v3"]
+OBSERVATION_VERSIONS: tuple[ObservationVersion, ...] = ("v1", "v2", "v3")
 
 
 def normalize_observation_version(value: str) -> ObservationVersion:
@@ -35,7 +40,9 @@ def feature_size_for_version(version: str) -> int:
     resolved = normalize_observation_version(version)
     if resolved == "v1":
         return OBSERVATION_FEATURE_SIZE
-    return OBSERVATION_V2_FEATURE_SIZE
+    if resolved == "v2":
+        return OBSERVATION_V2_FEATURE_SIZE
+    return OBSERVATION_V3_FEATURE_SIZE
 
 
 def try_infer_observation_version(input_size: int) -> ObservationVersion | None:
@@ -43,6 +50,8 @@ def try_infer_observation_version(input_size: int) -> ObservationVersion | None:
         return "v1"
     if input_size == OBSERVATION_V2_FEATURE_SIZE:
         return "v2"
+    if input_size == OBSERVATION_V3_FEATURE_SIZE:
+        return "v3"
     return None
 
 
@@ -51,11 +60,14 @@ def infer_observation_version(input_size: int) -> ObservationVersion:
         return "v1"
     if input_size == OBSERVATION_V2_FEATURE_SIZE:
         return "v2"
+    if input_size == OBSERVATION_V3_FEATURE_SIZE:
+        return "v3"
 
     raise ValueError(
         "Cannot infer card-play observation version from input size "
-        f"{input_size}. Expected {OBSERVATION_FEATURE_SIZE} (v1) or "
-        f"{OBSERVATION_V2_FEATURE_SIZE} (v2)."
+        f"{input_size}. Expected {OBSERVATION_FEATURE_SIZE} (v1), "
+        f"{OBSERVATION_V2_FEATURE_SIZE} (v2), or "
+        f"{OBSERVATION_V3_FEATURE_SIZE} (v3)."
     )
 
 
@@ -88,7 +100,9 @@ def encode_card_play_for_version(
     resolved = normalize_observation_version(version)
     if resolved == "v1":
         return encode_card_play(observation, legal_cards)
-    return encode_card_play_v2(observation, legal_cards)
+    if resolved == "v2":
+        return encode_card_play_v2(observation, legal_cards)
+    return encode_card_play_v3(observation, legal_cards)
 
 
 def encode_player_observation_for_version(
@@ -98,4 +112,6 @@ def encode_player_observation_for_version(
     resolved = normalize_observation_version(version)
     if resolved == "v1":
         return encode_player_observation(observation)
-    return encode_player_observation_v2(observation)
+    if resolved == "v2":
+        return encode_player_observation_v2(observation)
+    return encode_player_observation_v3(observation)
