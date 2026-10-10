@@ -6,8 +6,8 @@ import time
 from pathlib import Path
 
 from schafkopf_ai.evaluation.paired import (
-    EvaluationAgentSpec,
     OPPONENT_MODES,
+    EvaluationAgentSpec,
     PairedStats,
     available_agent_kinds,
     confidence_interval_95,
