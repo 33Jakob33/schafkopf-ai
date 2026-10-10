@@ -87,9 +87,7 @@ class BehaviorCloningCollector:
         self.targets[index] = target
         self.game_ids[index] = game_id
         self.legal_counts[index] = len(legal_cards)
-        self.contract_ids[index] = GAME_TYPE_ORDER.index(
-            observation.contract.game_type
-        )
+        self.contract_ids[index] = GAME_TYPE_ORDER.index(observation.contract.game_type)
         self._count += 1
 
     def arrays(self) -> BehaviorCloningArrays:
