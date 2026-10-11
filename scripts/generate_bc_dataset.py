@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal
 
 from schafkopf_ai.agents.agent import Agent
-from schafkopf_ai.agents.heuristic_agent import HeuristicAgent, HeuristicConfig
+from schafkopf_ai.agents.heuristic_agent import HeuristicConfig
 from schafkopf_ai.agents.heuristic_bidding import (
     BIDDING_PROFILES,
     bidding_config_for_profile,
@@ -129,14 +129,13 @@ def _run_heuristic_bid_random_card_game(
     agents: list[Agent] = []
     for seat in range(4):
         if seat == focal_seat:
-            focal = RecordingHeuristicAgent(
-                collector=collector,
-                game_id=game_index,
+            agents.append(
+                RecordingHeuristicAgent(
+                    collector=collector,
+                    game_id=game_index,
+                    config=HeuristicConfig(bidding=bidding_config),
+                )
             )
-            focal.expert = HeuristicAgent(
-                config=HeuristicConfig(bidding=bidding_config)
-            )
-            agents.append(focal)
         else:
             opponent_seed = seed + game_index * 10_007 + seat * 101 + 50_000
             agents.append(
