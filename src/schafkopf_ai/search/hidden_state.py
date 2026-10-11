@@ -1,0 +1,262 @@
+from __future__ import annotations
+
+import random
+from dataclasses import dataclass
+
+from schafkopf_ai.agents.heuristic_knowledge import infer_voids
+from schafkopf_ai.game.card import Card, Rank
+from schafkopf_ai.game.deck import Deck
+from schafkopf_ai.game.game_state import GameState
+from schafkopf_ai.game.game_type import GameType
+from schafkopf_ai.game.observation import PlayerObservation
+from schafkopf_ai.game.trump import is_trump
+
+
+class HiddenStateSamplingError(RuntimeError):
+    """Raised when no hidden deal consistent with public information is found."""
+
+
+@dataclass(frozen=True, slots=True)
+class Determinization:
+    """
+    One complete hidden deal consistent with a player's public observation.
+
+    The initial hands stay inside the search layer. Agents only receive them
+    indirectly through Monte-Carlo outcomes and never through PlayerObservation.
+    """
+
+    initial_hands: tuple[tuple[Card, ...], ...]
+
+    def build_state(self, observation: PlayerObservation) -> GameState:
+        """Reconstruct the exact public position for this hidden deal."""
+        return reconstruct_state(
+            observation=observation,
+            initial_hands=self.initial_hands,
+        )
+
+
+def _public_plays(observation: PlayerObservation) -> tuple[tuple[int, Card], ...]:
+    plays: list[tuple[int, Card]] = []
+    for trick in observation.completed_tricks:
+        plays.extend((play.player, play.card) for play in trick)
+    plays.extend((play.player, play.card) for play in observation.current_trick)
+    return tuple(plays)
+
+
+def _starting_player(observation: PlayerObservation) -> int:
+    if observation.completed_tricks:
+        return observation.completed_tricks[0][0].player
+    if observation.current_trick:
+        return observation.current_trick[0].player
+    if observation.current_player is not None:
+        return observation.current_player
+    raise ValueError("Cannot reconstruct a completed observation without play history.")
+
+
+def reconstruct_state(
+    *,
+    observation: PlayerObservation,
+    initial_hands: tuple[tuple[Card, ...], ...],
+) -> GameState:
+    """
+    Rebuild a mutable GameState and replay all publicly observed cards.
+
+    Replay uses the normal legality engine. Therefore a determinization that
+    would make any historical public action illegal is rejected by construction.
+    """
+    state = GameState.from_hands(
+        hands=initial_hands,
+        contract=observation.contract,
+        starting_player=_starting_player(observation),
+    )
+
+    for player, card in _public_plays(observation):
+        state.play_card(player, card)
+
+    rebuilt = state.observation_for(observation.player_index)
+    if rebuilt != observation:
+        raise ValueError("Reconstructed state does not match the source observation.")
+
+    return state
+
+
+class HiddenStateSampler:
+    """
+    Sample complete deals consistent with one player's information set.
+
+    Sampling starts from uniformly shuffled allocations of unseen cards into
+    opponents' remaining hand slots and rejects allocations that violate
+    proven voids, Sauspiel partner knowledge, or historical legality. The real
+    hidden hands from the environment are never inspected.
+    """
+
+    def __init__(
+        self,
+        *,
+        rng: random.Random | None = None,
+        max_attempts_per_sample: int = 5_000,
+    ) -> None:
+        if max_attempts_per_sample <= 0:
+            raise ValueError("max_attempts_per_sample must be positive.")
+        self.rng = random.Random() if rng is None else rng
+        self.max_attempts_per_sample = max_attempts_per_sample
+        self._all_cards = Deck().cards
+        self._card_order = {card: index for index, card in enumerate(self._all_cards)}
+
+    def sample(self, observation: PlayerObservation) -> Determinization:
+        """Return one determinization consistent with the observation."""
+        played_by_player: list[list[Card]] = [[] for _ in range(4)]
+        played_cards: set[Card] = set()
+
+        for player, card in _public_plays(observation):
+            if card in played_cards:
+                raise ValueError("Observation contains a duplicated played card.")
+            played_cards.add(card)
+            played_by_player[player].append(card)
+
+        own_cards = set(observation.hand)
+        if own_cards & played_cards:
+            raise ValueError("Observation hand contains an already played card.")
+
+        remaining_counts = [
+            GameState.CARDS_PER_PLAYER - len(played_by_player[player])
+            for player in range(4)
+        ]
+        if remaining_counts[observation.player_index] != len(observation.hand):
+            raise ValueError("Observation hand size is inconsistent with play history.")
+
+        unseen = [
+            card
+            for card in self._all_cards
+            if card not in played_cards and card not in own_cards
+        ]
+        opponent_slots = sum(
+            remaining_counts[player]
+            for player in range(4)
+            if player != observation.player_index
+        )
+        if len(unseen) != opponent_slots:
+            raise ValueError("Observation does not account for exactly 32 cards.")
+
+        voids = infer_voids(observation)
+
+        for _ in range(self.max_attempts_per_sample):
+            current_hands = self._random_current_hands(
+                observation=observation,
+                unseen=unseen,
+                remaining_counts=remaining_counts,
+            )
+            if not self._respects_voids(
+                observation=observation,
+                current_hands=current_hands,
+                plain_suits=voids.plain_suits,
+                trump_void_players=voids.trump_void_players,
+            ):
+                continue
+            if not self._respects_called_ace_knowledge(
+                observation=observation,
+                current_hands=current_hands,
+                played_by_player=played_by_player,
+            ):
+                continue
+
+            initial_hands = tuple(
+                tuple(current_hands[player]) + tuple(played_by_player[player])
+                for player in range(4)
+            )
+            determinization = Determinization(initial_hands=initial_hands)
+
+            try:
+                determinization.build_state(observation)
+            except (ValueError, RuntimeError):
+                continue
+
+            return determinization
+
+        raise HiddenStateSamplingError(
+            "Could not sample a hidden deal consistent with the observation "
+            f"after {self.max_attempts_per_sample:,} attempts."
+        )
+
+    def sample_many(
+        self,
+        observation: PlayerObservation,
+        count: int,
+    ) -> tuple[Determinization, ...]:
+        if count <= 0:
+            raise ValueError("count must be positive.")
+        return tuple(self.sample(observation) for _ in range(count))
+
+    def _random_current_hands(
+        self,
+        *,
+        observation: PlayerObservation,
+        unseen: list[Card],
+        remaining_counts: list[int],
+    ) -> list[list[Card]]:
+        shuffled = list(unseen)
+        self.rng.shuffle(shuffled)
+
+        current_hands: list[list[Card]] = [[] for _ in range(4)]
+        current_hands[observation.player_index] = list(observation.hand)
+
+        offset = 0
+        for player in range(4):
+            if player == observation.player_index:
+                continue
+            count = remaining_counts[player]
+            current_hands[player] = shuffled[offset : offset + count]
+            current_hands[player].sort(key=self._card_order.__getitem__)
+            offset += count
+
+        return current_hands
+
+    @staticmethod
+    def _respects_voids(
+        *,
+        observation: PlayerObservation,
+        current_hands: list[list[Card]],
+        plain_suits: tuple[frozenset[object], ...],
+        trump_void_players: frozenset[int],
+    ) -> bool:
+        for player, hand in enumerate(current_hands):
+            if player == observation.player_index:
+                continue
+            for card in hand:
+                if is_trump(card, observation.contract):
+                    if player in trump_void_players:
+                        return False
+                elif card.suit in plain_suits[player]:
+                    return False
+        return True
+
+    @staticmethod
+    def _respects_called_ace_knowledge(
+        *,
+        observation: PlayerObservation,
+        current_hands: list[list[Card]],
+        played_by_player: list[list[Card]],
+    ) -> bool:
+        contract = observation.contract
+        if contract.game_type is not GameType.SAUSPIEL:
+            return True
+        if contract.called_suit is None:
+            raise ValueError("Sauspiel requires a called suit.")
+
+        called_ace = Card(contract.called_suit, Rank.ACE)
+        owner: int | None = None
+        for player in range(4):
+            if (
+                called_ace in current_hands[player]
+                or called_ace in played_by_player[player]
+            ):
+                owner = player
+                break
+
+        if owner is None:
+            raise ValueError("No player owns the called Ace.")
+        if owner == contract.declarer:
+            return False
+
+        known = observation.known_called_ace_player
+        return known is None or owner == known
