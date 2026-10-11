@@ -5,6 +5,7 @@ import statistics
 import time
 from pathlib import Path
 
+from schafkopf_ai.agents.heuristic_bidding import BIDDING_PROFILES
 from schafkopf_ai.evaluation.paired import (
     OPPONENT_MODES,
     EvaluationAgentSpec,
@@ -23,6 +24,7 @@ def _default_name(kind: str) -> str:
         "bc": "BC",
         "dagger": "DAgger",
         "neural": "Neural",
+        "multihead": "MultiHead",
         "ppo": "PPO",
         "specialist": "Specialist",
     }
@@ -42,6 +44,7 @@ def run_evaluation(
     progress_every: int,
     device: str,
     opponent_mode: str,
+    bidding_profile: str,
 ) -> None:
     reference = EvaluationAgentSpec(
         kind=reference_kind,
@@ -75,6 +78,7 @@ def run_evaluation(
         progress_every=progress_every,
         progress_callback=print_progress,
         opponent_mode=opponent_mode,
+        bidding_profile=bidding_profile,
     )
 
     elapsed = time.perf_counter() - start
@@ -97,6 +101,7 @@ def run_evaluation(
     print(f"Candidate checkpoint:       {result.candidate_checkpoint or '-'}")
     print(f"Seed:                       {seed}")
     print(f"Opponent mode:              {opponent_mode}")
+    print(f"Bidding profile:            {bidding_profile}")
     print(f"Elapsed:                    {elapsed:.3f} s")
 
     print("\nPrimary paired result")
@@ -203,6 +208,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--progress-every", type=int, default=1_000)
     parser.add_argument("--device", default="cpu")
     parser.add_argument(
+        "--bidding-profile",
+        choices=BIDDING_PROFILES,
+        default="conservative",
+        help=(
+            "Heuristic bidding-threshold preset used by the focal agent and "
+            "heuristic-bidding opponents (default: conservative)."
+        ),
+    )
+    parser.add_argument(
         "--opponent-mode",
         choices=OPPONENT_MODES,
         default="heuristic-bid-random-card",
@@ -229,6 +243,7 @@ def main() -> None:
         progress_every=args.progress_every,
         device=args.device,
         opponent_mode=args.opponent_mode,
+        bidding_profile=args.bidding_profile,
     )
 
 
