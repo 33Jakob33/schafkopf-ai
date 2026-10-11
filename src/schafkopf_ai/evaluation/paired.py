@@ -33,7 +33,11 @@ from schafkopf_ai.training.card_play_roles import (
 
 AgentLoader = Callable[[Path | None, str], Agent]
 
-OPPONENT_MODES: tuple[str, ...] = ("heuristic-bid-random-card", "random")
+OPPONENT_MODES: tuple[str, ...] = (
+    "heuristic",
+    "heuristic-bid-random-card",
+    "random",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -254,7 +258,11 @@ def run_paired_variant(
         else:
             opponent_seed = master_seed + game_index * 10_007 + seat * 101 + 50_000
             opponent_rng = random.Random(opponent_seed)
-            if opponent_mode == "heuristic-bid-random-card":
+            if opponent_mode == "heuristic":
+                agents.append(
+                    HeuristicAgent(config=HeuristicConfig(bidding=bidding_config))
+                )
+            elif opponent_mode == "heuristic-bid-random-card":
                 agents.append(
                     HeuristicBiddingRandomCardAgent(
                         rng=opponent_rng,
