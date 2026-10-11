@@ -173,14 +173,6 @@ def load_evaluation_agent(
     bidding_profile: str = "baseline",
 ) -> Agent:
     kind = spec.kind.lower()
-    try:
-        loader = AGENT_LOADERS[kind]
-    except KeyError as exc:
-        supported = ", ".join(available_agent_kinds())
-        raise ValueError(
-            f"Unsupported evaluation agent kind {spec.kind!r}. "
-            f"Supported kinds: {supported}."
-        ) from exc
 
     if kind == "rollout":
         if spec.checkpoint is not None:
@@ -191,6 +183,14 @@ def load_evaluation_agent(
             max_sampling_attempts=spec.rollout_max_sampling_attempts,
         )
     else:
+        try:
+            loader = AGENT_LOADERS[kind]
+        except KeyError as exc:
+            supported = ", ".join(available_agent_kinds())
+            raise ValueError(
+                f"Unsupported evaluation agent kind {spec.kind!r}. "
+                f"Supported kinds: {supported}."
+            ) from exc
         agent = loader(spec.checkpoint, device)
 
     bidding_config = bidding_config_for_profile(bidding_profile)
