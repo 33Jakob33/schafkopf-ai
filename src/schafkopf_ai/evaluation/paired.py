@@ -187,7 +187,7 @@ def load_evaluation_agent(
     if isinstance(agent, HeuristicAgent):
         return configured_bidder
     if hasattr(agent, "bidding_agent"):
-        agent.bidding_agent = configured_bidder
+        setattr(agent, "bidding_agent", configured_bidder)
     return agent
 
 
@@ -305,6 +305,7 @@ def evaluate_paired_agents(
             game_index=game_index,
             master_seed=seed,
             opponent_mode=opponent_mode,
+            bidding_profile=bidding_profile,
         )
 
         if reference_result.contract != candidate_result.contract:
