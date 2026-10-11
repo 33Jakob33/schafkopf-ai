@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Literal
 
 from schafkopf_ai.agents.agent import Agent
+from schafkopf_ai.agents.heuristic_agent import HeuristicAgent, HeuristicConfig
+from schafkopf_ai.agents.heuristic_bidding import (
+    BIDDING_PROFILES,
+    bidding_config_for_profile,
+)
 from schafkopf_ai.agents.heuristic_bidding_random_card_agent import (
     HeuristicBiddingRandomCardAgent,
 )
@@ -106,6 +111,7 @@ def _run_heuristic_bid_random_card_game(
     collector: BehaviorCloningCollector,
     game_index: int,
     seed: int,
+    bidding_profile: str,
 ) -> GameType:
     """
     Record one heuristic focal player against random card-play opponents.
@@ -118,20 +124,25 @@ def _run_heuristic_bid_random_card_game(
     starting_player = (game_index // 4) % 4
     deal_seed = seed + game_index * 1_009 + 1
 
+    bidding_config = bidding_config_for_profile(bidding_profile)
+
     agents: list[Agent] = []
     for seat in range(4):
         if seat == focal_seat:
-            agents.append(
-                RecordingHeuristicAgent(
-                    collector=collector,
-                    game_id=game_index,
-                )
+            focal = RecordingHeuristicAgent(
+                collector=collector,
+                game_id=game_index,
             )
+            focal.expert = HeuristicAgent(
+                config=HeuristicConfig(bidding=bidding_config)
+            )
+            agents.append(focal)
         else:
             opponent_seed = seed + game_index * 10_007 + seat * 101 + 50_000
             agents.append(
                 HeuristicBiddingRandomCardAgent(
                     rng=random.Random(opponent_seed),
+                    bidding_config=bidding_config,
                 )
             )
 
@@ -152,6 +163,7 @@ def run_generation(
     progress_every: int,
     observation_version: str,
     generation_mode: GenerationMode = "all-heuristic",
+    bidding_profile: str = "baseline",
 ) -> None:
     if games <= 0:
         raise ValueError("games must be greater than zero.")
@@ -195,6 +207,7 @@ def run_generation(
                 collector=collector,
                 game_index=game_index,
                 seed=seed,
+                bidding_profile=bidding_profile,
             )
 
         contract_counts[game_type] += 1
@@ -226,6 +239,7 @@ def run_generation(
     print("\nBehavioral-cloning dataset generated")
     print("=" * 72)
     print(f"Generation mode:            {generation_mode}")
+    print(f"Bidding profile:            {bidding_profile}")
     print(f"Games:                      {games:,}")
     print(f"Examples:                   {arrays.example_count:,}")
     print(f"Non-trivial decisions:      {nontrivial:,}")
@@ -291,6 +305,15 @@ def parse_args() -> argparse.Namespace:
         help="Card-play observation encoding to store (default: v1).",
     )
     parser.add_argument(
+        "--bidding-profile",
+        choices=BIDDING_PROFILES,
+        default="conservative",
+        help=(
+            "Heuristic bidding threshold preset used by "
+            "heuristic-bid-random-card (default: conservative)."
+        ),
+    )
+    parser.add_argument(
         "--generation-mode",
         choices=GENERATION_MODES,
         default="all-heuristic",
@@ -314,6 +337,7 @@ def main() -> None:
         progress_every=args.progress_every,
         observation_version=args.observation_version,
         generation_mode=args.generation_mode,
+        bidding_profile=args.bidding_profile,
     )
 
 
