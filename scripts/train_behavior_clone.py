@@ -177,10 +177,10 @@ def load_initial_weights(
     action_count = int(checkpoint.get("action_count", ACTION_COUNT))
     raw_hidden_sizes = checkpoint.get("hidden_sizes", model.hidden_sizes)
 
-    if not isinstance(raw_hidden_sizes, (tuple, list)) or len(raw_hidden_sizes) != 2:
-        raise ValueError("Initial checkpoint hidden_sizes must contain two values.")
+    if not isinstance(raw_hidden_sizes, (tuple, list)) or len(raw_hidden_sizes) < 2:
+        raise ValueError("Initial checkpoint hidden_sizes must contain at least two values.")
 
-    hidden_sizes = (int(raw_hidden_sizes[0]), int(raw_hidden_sizes[1]))
+    hidden_sizes = tuple(int(value) for value in raw_hidden_sizes)
 
     checkpoint_version = resolve_checkpoint_observation_version(
         input_size=input_size,
@@ -247,7 +247,8 @@ def train(
     validation_fraction: float,
     seed: int,
     device_name: str,
-    hidden_sizes: tuple[int, int],
+    hidden_sizes: tuple[int, ...],
+    architecture: str | None,
     gru_hidden_size: int,
     nontrivial_only: bool,
     contract_balance_alpha: float,
@@ -356,6 +357,7 @@ def train(
         hidden_sizes=hidden_sizes,
         gru_hidden_size=gru_hidden_size,
         action_count=ACTION_COUNT,
+        architecture=architecture,
     ).to(device)
 
     if init_checkpoint is not None:
@@ -487,6 +489,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hidden-1", type=int, default=512)
     parser.add_argument("--hidden-2", type=int, default=256)
     parser.add_argument(
+        "--hidden-3",
+        type=int,
+        default=None,
+        help=(
+            "Optional third hidden layer. Supplying it selects the deep MLP "
+            "unless --architecture is given explicitly."
+        ),
+    )
+    parser.add_argument(
+        "--architecture",
+        choices=("auto", "mlp_v1", "mlp_deep_v1", "gru_v1"),
+        default="auto",
+        help=(
+            "Policy architecture. auto preserves legacy behavior and selects "
+            "the deep MLP automatically when --hidden-3 is supplied."
+        ),
+    )
+    parser.add_argument(
         "--gru-hidden-size",
         type=int,
         default=128,
@@ -524,6 +544,15 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    hidden_sizes = (
+        (args.hidden_1, args.hidden_2, args.hidden_3)
+        if args.hidden_3 is not None
+        else (args.hidden_1, args.hidden_2)
+    )
+    architecture = None if args.architecture == "auto" else args.architecture
+    if architecture is None and args.hidden_3 is not None:
+        architecture = "mlp_deep_v1"
+
     train(
         dataset_path=args.dataset,
         output=args.output,
@@ -534,7 +563,8 @@ def main() -> None:
         validation_fraction=args.validation_fraction,
         seed=args.seed,
         device_name=args.device,
-        hidden_sizes=(args.hidden_1, args.hidden_2),
+        hidden_sizes=hidden_sizes,
+        architecture=architecture,
         gru_hidden_size=args.gru_hidden_size,
         nontrivial_only=args.nontrivial_only,
         contract_balance_alpha=args.contract_balance_alpha,
