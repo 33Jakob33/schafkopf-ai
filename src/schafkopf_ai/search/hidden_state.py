@@ -141,24 +141,15 @@ class HiddenStateSampler:
         voids = infer_voids(observation)
 
         for _ in range(self.max_attempts_per_sample):
-            current_hands = self._random_current_hands(
+            current_hands = self._constraint_current_hands(
                 observation=observation,
                 unseen=unseen,
                 remaining_counts=remaining_counts,
-            )
-            if not self._respects_voids(
-                observation=observation,
-                current_hands=current_hands,
                 plain_suits=voids.plain_suits,
                 trump_void_players=voids.trump_void_players,
-            ):
-                continue
-            if not self._respects_called_ace_knowledge(
-                observation=observation,
-                current_hands=current_hands,
-                played_by_player=played_by_player,
-            ):
-                continue
+            )
+            if current_hands is None:
+                break
 
             initial_hands = tuple(
                 tuple(current_hands[player]) + tuple(played_by_player[player])
@@ -180,8 +171,11 @@ class HiddenStateSampler:
             return determinization
 
         raise HiddenStateSamplingError(
-            "Could not sample a hidden deal consistent with the observation "
-            f"after {self.max_attempts_per_sample:,} attempts."
+            "Could not sample a hidden deal consistent with the observation. "
+            f"game={observation.contract.game_type.value}, "
+            f"trick={observation.trick_number}, "
+            f"played={len(observation.cards_played)}, "
+            f"known_called_ace_player={observation.known_called_ace_player}."
         )
 
     def sample_many(
@@ -193,48 +187,132 @@ class HiddenStateSampler:
             raise ValueError("count must be positive.")
         return tuple(self.sample(observation) for _ in range(count))
 
-    def _random_current_hands(
+    def _constraint_current_hands(
         self,
         *,
         observation: PlayerObservation,
         unseen: list[Card],
         remaining_counts: list[int],
-    ) -> list[list[Card]]:
-        shuffled = list(unseen)
-        self.rng.shuffle(shuffled)
+        plain_suits: tuple[frozenset[Suit], ...],
+        trump_void_players: frozenset[int],
+    ) -> list[list[Card]] | None:
+        """
+        Fill opponent hand slots with randomized backtracking.
+
+        Candidate holders are constrained before assignment, so late-game
+        determinizations do not rely on repeatedly shuffling into a tiny valid
+        subset of all deals.
+        """
+        focal_player = observation.player_index
+        opponents = tuple(player for player in range(4) if player != focal_player)
+
+        candidate_holders = {
+            card: self._candidate_holders(
+                card=card,
+                observation=observation,
+                opponents=opponents,
+                plain_suits=plain_suits,
+                trump_void_players=trump_void_players,
+            )
+            for card in unseen
+        }
+        if any(not holders for holders in candidate_holders.values()):
+            return None
+
+        random_priority = {card: self.rng.random() for card in unseen}
+        ordered_cards = sorted(
+            unseen,
+            key=lambda card: (
+                len(candidate_holders[card]),
+                random_priority[card],
+            ),
+        )
 
         current_hands: list[list[Card]] = [[] for _ in range(4)]
-        current_hands[observation.player_index] = list(observation.hand)
+        current_hands[focal_player] = list(observation.hand)
+        slots = {
+            player: remaining_counts[player]
+            for player in opponents
+        }
 
-        offset = 0
-        for player in range(4):
-            if player == observation.player_index:
-                continue
-            count = remaining_counts[player]
-            current_hands[player] = shuffled[offset : offset + count]
+        def can_still_fill(start_index: int) -> bool:
+            remaining_cards = ordered_cards[start_index:]
+            for player in opponents:
+                if slots[player] <= 0:
+                    continue
+                compatible = sum(
+                    player in candidate_holders[card]
+                    for card in remaining_cards
+                )
+                if compatible < slots[player]:
+                    return False
+            return True
+
+        def assign(index: int) -> bool:
+            if index == len(ordered_cards):
+                return all(slots[player] == 0 for player in opponents)
+
+            card = ordered_cards[index]
+            holders = [
+                player
+                for player in candidate_holders[card]
+                if slots[player] > 0
+            ]
+            self.rng.shuffle(holders)
+
+            for player in holders:
+                current_hands[player].append(card)
+                slots[player] -= 1
+
+                if can_still_fill(index + 1) and assign(index + 1):
+                    return True
+
+                slots[player] += 1
+                current_hands[player].pop()
+
+            return False
+
+        if not can_still_fill(0) or not assign(0):
+            return None
+
+        for player in opponents:
             current_hands[player].sort(key=self._card_order.__getitem__)
-            offset += count
 
         return current_hands
 
     @staticmethod
-    def _respects_voids(
+    def _candidate_holders(
         *,
+        card: Card,
         observation: PlayerObservation,
-        current_hands: list[list[Card]],
+        opponents: tuple[int, ...],
         plain_suits: tuple[frozenset[Suit], ...],
         trump_void_players: frozenset[int],
-    ) -> bool:
-        for player, hand in enumerate(current_hands):
-            if player == observation.player_index:
+    ) -> tuple[int, ...]:
+        contract = observation.contract
+        candidates: list[int] = []
+
+        for player in opponents:
+            if is_trump(card, contract):
+                if player in trump_void_players:
+                    continue
+            elif card.suit in plain_suits[player]:
                 continue
-            for card in hand:
-                if is_trump(card, observation.contract):
-                    if player in trump_void_players:
-                        return False
-                elif card.suit in plain_suits[player]:
-                    return False
-        return True
+
+            if (
+                contract.game_type is GameType.SAUSPIEL
+                and contract.called_suit is not None
+                and card == Card(contract.called_suit, Rank.ACE)
+            ):
+                if player == contract.declarer:
+                    continue
+                known_holder = observation.known_called_ace_player
+                if known_holder is not None and player != known_holder:
+                    continue
+
+            candidates.append(player)
+
+        return tuple(candidates)
 
     @staticmethod
     def _respects_contract_legality(
@@ -259,33 +337,3 @@ class HiddenStateSampler:
             for card in declarer_hand
         )
 
-    @staticmethod
-    def _respects_called_ace_knowledge(
-        *,
-        observation: PlayerObservation,
-        current_hands: list[list[Card]],
-        played_by_player: list[list[Card]],
-    ) -> bool:
-        contract = observation.contract
-        if contract.game_type is not GameType.SAUSPIEL:
-            return True
-        if contract.called_suit is None:
-            raise ValueError("Sauspiel requires a called suit.")
-
-        called_ace = Card(contract.called_suit, Rank.ACE)
-        owner: int | None = None
-        for player in range(4):
-            if (
-                called_ace in current_hands[player]
-                or called_ace in played_by_player[player]
-            ):
-                owner = player
-                break
-
-        if owner is None:
-            raise ValueError("No player owns the called Ace.")
-        if owner == contract.declarer:
-            return False
-
-        known = observation.known_called_ace_player
-        return known is None or owner == known
