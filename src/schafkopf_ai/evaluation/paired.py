@@ -187,7 +187,7 @@ def load_evaluation_agent(
     if isinstance(agent, HeuristicAgent):
         return configured_bidder
     if hasattr(agent, "bidding_agent"):
-        setattr(agent, "bidding_agent", configured_bidder)
+        agent.bidding_agent = configured_bidder
     return agent
 
 
