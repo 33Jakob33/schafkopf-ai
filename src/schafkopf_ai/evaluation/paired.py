@@ -181,9 +181,7 @@ def load_evaluation_agent(
     agent = loader(spec.checkpoint, device)
 
     bidding_config = bidding_config_for_profile(bidding_profile)
-    configured_bidder = HeuristicAgent(
-        config=HeuristicConfig(bidding=bidding_config)
-    )
+    configured_bidder = HeuristicAgent(config=HeuristicConfig(bidding=bidding_config))
     if isinstance(agent, HeuristicAgent):
         return configured_bidder
     if hasattr(agent, "bidding_agent"):
