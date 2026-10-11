@@ -88,6 +88,43 @@ class CardPlayPolicyNetwork(nn.Module):
         return cast(Tensor, self.network(features))
 
 
+class DeepCardPlayPolicyNetwork(nn.Module):
+    """Configurable deeper MLP used for card-play capacity experiments."""
+
+    architecture = "mlp_deep_v1"
+
+    def __init__(
+        self,
+        *,
+        input_size: int = OBSERVATION_V2_FEATURE_SIZE,
+        hidden_sizes: tuple[int, ...] = (1024, 512, 256),
+        action_count: int = ACTION_COUNT,
+    ) -> None:
+        super().__init__()
+
+        if len(hidden_sizes) < 2:
+            raise ValueError("Deep MLP requires at least two hidden layers.")
+        if any(size <= 0 for size in hidden_sizes):
+            raise ValueError("All hidden-layer sizes must be positive.")
+
+        self.input_size = input_size
+        self.hidden_sizes = hidden_sizes
+        self.action_count = action_count
+        self.observation_version = try_infer_observation_version(input_size)
+
+        layers: list[nn.Module] = []
+        previous = input_size
+        for hidden_size in hidden_sizes:
+            layers.append(nn.Linear(previous, hidden_size))
+            layers.append(nn.ReLU())
+            previous = hidden_size
+        layers.append(nn.Linear(previous, action_count))
+        self.network = nn.Sequential(*layers)
+
+    def forward(self, features: Tensor) -> Tensor:
+        return cast(Tensor, self.network(features))
+
+
 class GRUCardPlayPolicyNetwork(nn.Module):
     """
     Hybrid V3 policy with a structured V2 branch and a temporal GRU branch.
@@ -171,7 +208,9 @@ class GRUCardPlayPolicyNetwork(nn.Module):
         return cast(Tensor, self.fusion(fused))
 
 
-CardPlayPolicyModel = CardPlayPolicyNetwork | GRUCardPlayPolicyNetwork
+CardPlayPolicyModel = (
+    CardPlayPolicyNetwork | DeepCardPlayPolicyNetwork | GRUCardPlayPolicyNetwork
+)
 
 
 def architecture_for_observation_version(version: str) -> str:
@@ -184,25 +223,48 @@ def architecture_for_observation_version(version: str) -> str:
 def create_card_play_policy(
     *,
     input_size: int,
-    hidden_sizes: tuple[int, int] = (512, 256),
+    hidden_sizes: tuple[int, ...] = (512, 256),
     gru_hidden_size: int = 128,
     action_count: int = ACTION_COUNT,
+    architecture: str | None = None,
 ) -> CardPlayPolicyModel:
-    """Create the policy architecture implied by the observation version."""
+    """Create a card-play policy while keeping legacy checkpoint defaults."""
     version = infer_observation_version(input_size)
-    if version == "v3":
+    selected = architecture or architecture_for_observation_version(version)
+
+    if selected == GRUCardPlayPolicyNetwork.architecture:
+        if version != "v3":
+            raise ValueError("GRU card-play policy requires V3 observations.")
+        if len(hidden_sizes) != 2:
+            raise ValueError("GRU policy requires exactly two hidden sizes.")
         return GRUCardPlayPolicyNetwork(
             input_size=input_size,
-            hidden_sizes=hidden_sizes,
+            hidden_sizes=(hidden_sizes[0], hidden_sizes[1]),
             gru_hidden_size=gru_hidden_size,
             action_count=action_count,
         )
 
-    return CardPlayPolicyNetwork(
-        input_size=input_size,
-        hidden_sizes=hidden_sizes,
-        action_count=action_count,
-    )
+    if selected == DeepCardPlayPolicyNetwork.architecture:
+        if version == "v3":
+            raise ValueError("Deep MLP is intended for structured V1/V2 observations.")
+        return DeepCardPlayPolicyNetwork(
+            input_size=input_size,
+            hidden_sizes=hidden_sizes,
+            action_count=action_count,
+        )
+
+    if selected == CardPlayPolicyNetwork.architecture:
+        if version == "v3":
+            raise ValueError("V3 observations require the GRU architecture.")
+        if len(hidden_sizes) != 2:
+            raise ValueError("Legacy MLP requires exactly two hidden sizes.")
+        return CardPlayPolicyNetwork(
+            input_size=input_size,
+            hidden_sizes=(hidden_sizes[0], hidden_sizes[1]),
+            action_count=action_count,
+        )
+
+    raise ValueError(f"Unsupported card-play architecture {selected!r}.")
 
 
 def mask_illegal_logits(logits: Tensor, legal_mask: Tensor) -> Tensor:
