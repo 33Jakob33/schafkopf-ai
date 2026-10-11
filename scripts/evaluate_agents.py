@@ -108,6 +108,12 @@ def run_evaluation(
         f"Candidate:                  {result.candidate_name} ({result.candidate_kind})"
     )
     print(f"Candidate checkpoint:       {result.candidate_checkpoint or '-'}")
+    if reference_kind.lower() == "rollout":
+        print(f"Reference rollout samples:  {reference_rollout_samples}")
+        print(f"Reference rollout seed:     {reference_rollout_seed}")
+    if candidate_kind.lower() == "rollout":
+        print(f"Candidate rollout samples:  {candidate_rollout_samples}")
+        print(f"Candidate rollout seed:     {candidate_rollout_seed}")
     print(f"Seed:                       {seed}")
     print(f"Opponent mode:              {opponent_mode}")
     print(f"Bidding profile:            {bidding_profile}")
