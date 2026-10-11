@@ -12,6 +12,7 @@ from schafkopf_ai.game.observation import PlayerObservation
 from schafkopf_ai.training.behavior_cloning import (
     BehaviorCloningArrays,
     CardPlayPolicyNetwork,
+    DeepCardPlayPolicyNetwork,
     GRUCardPlayPolicyNetwork,
     contract_balance_weights,
     filter_indices_by_role,
@@ -53,6 +54,46 @@ def test_card_play_policy_network_has_32_logits() -> None:
     logits = model(features)
 
     assert logits.shape == (3, ACTION_COUNT)
+
+
+
+
+def test_deep_card_play_policy_network_supports_three_hidden_layers() -> None:
+    model = DeepCardPlayPolicyNetwork(
+        input_size=222,
+        hidden_sizes=(128, 96, 64),
+    )
+    features = torch.zeros((3, 222), dtype=torch.float32)
+
+    logits = model(features)
+
+    assert logits.shape == (3, ACTION_COUNT)
+    assert model.architecture == "mlp_deep_v1"
+    assert model.hidden_sizes == (128, 96, 64)
+
+
+def test_neural_agent_loads_deep_mlp_checkpoint(tmp_path: Path) -> None:
+    model = DeepCardPlayPolicyNetwork(
+        input_size=222,
+        hidden_sizes=(128, 96, 64),
+    )
+    checkpoint = tmp_path / "deep.pt"
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "architecture": model.architecture,
+            "input_size": model.input_size,
+            "hidden_sizes": model.hidden_sizes,
+            "action_count": model.action_count,
+            "observation_version": model.observation_version,
+        },
+        checkpoint,
+    )
+
+    agent = NeuralCardPlayAgent.from_checkpoint(checkpoint)
+
+    assert isinstance(agent.model, DeepCardPlayPolicyNetwork)
+    assert agent.model.hidden_sizes == (128, 96, 64)
 
 
 def test_mask_illegal_logits_prevents_illegal_argmax() -> None:
