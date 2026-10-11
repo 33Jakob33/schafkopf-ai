@@ -26,6 +26,7 @@ def _default_name(kind: str) -> str:
         "neural": "Neural",
         "multihead": "MultiHead",
         "ppo": "PPO",
+        "rollout": "Rollout",
         "specialist": "Specialist",
     }
     return names.get(kind.lower(), kind)
@@ -36,9 +37,13 @@ def run_evaluation(
     reference_kind: str,
     reference_checkpoint: Path | None,
     reference_name: str | None,
+    reference_rollout_samples: int,
+    reference_rollout_seed: int,
     candidate_kind: str,
     candidate_checkpoint: Path | None,
     candidate_name: str | None,
+    candidate_rollout_samples: int,
+    candidate_rollout_seed: int,
     games: int,
     seed: int,
     progress_every: int,
@@ -50,11 +55,15 @@ def run_evaluation(
         kind=reference_kind,
         name=reference_name or _default_name(reference_kind),
         checkpoint=reference_checkpoint,
+        rollout_samples=reference_rollout_samples,
+        rollout_seed=reference_rollout_seed,
     )
     candidate = EvaluationAgentSpec(
         kind=candidate_kind,
         name=candidate_name or _default_name(candidate_kind),
         checkpoint=candidate_checkpoint,
+        rollout_samples=candidate_rollout_samples,
+        rollout_seed=candidate_rollout_seed,
     )
 
     start = time.perf_counter()
@@ -188,6 +197,18 @@ def parse_args() -> argparse.Namespace:
         help="Display name for the reference agent.",
     )
     parser.add_argument(
+        "--reference-rollout-samples",
+        type=int,
+        default=8,
+        help="Rollout samples per legal action when reference-kind=rollout.",
+    )
+    parser.add_argument(
+        "--reference-rollout-seed",
+        type=int,
+        default=1001,
+        help="Hidden-state sampling seed when reference-kind=rollout.",
+    )
+    parser.add_argument(
         "--candidate-kind",
         required=True,
         help=f"Candidate agent kind. Registered kinds: {supported}.",
@@ -202,6 +223,18 @@ def parse_args() -> argparse.Namespace:
         "--candidate-name",
         default=None,
         help="Display name for the candidate agent.",
+    )
+    parser.add_argument(
+        "--candidate-rollout-samples",
+        type=int,
+        default=8,
+        help="Rollout samples per legal action when candidate-kind=rollout.",
+    )
+    parser.add_argument(
+        "--candidate-rollout-seed",
+        type=int,
+        default=2001,
+        help="Hidden-state sampling seed when candidate-kind=rollout.",
     )
     parser.add_argument("--games", type=int, default=10_000)
     parser.add_argument("--seed", type=int, default=123)
@@ -235,9 +268,13 @@ def main() -> None:
         reference_kind=args.reference_kind,
         reference_checkpoint=args.reference_checkpoint,
         reference_name=args.reference_name,
+        reference_rollout_samples=args.reference_rollout_samples,
+        reference_rollout_seed=args.reference_rollout_seed,
         candidate_kind=args.candidate_kind,
         candidate_checkpoint=args.candidate_checkpoint,
         candidate_name=args.candidate_name,
+        candidate_rollout_samples=args.candidate_rollout_samples,
+        candidate_rollout_seed=args.candidate_rollout_seed,
         games=args.games,
         seed=args.seed,
         progress_every=args.progress_every,
