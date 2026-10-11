@@ -330,4 +330,3 @@ class HiddenStateSampler:
             and card.rank not in {Rank.OBER, Rank.UNTER}
             for card in declarer_hand
         )
-
