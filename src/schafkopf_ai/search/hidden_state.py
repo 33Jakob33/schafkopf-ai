@@ -230,10 +230,7 @@ class HiddenStateSampler:
 
         current_hands: list[list[Card]] = [[] for _ in range(4)]
         current_hands[focal_player] = list(observation.hand)
-        slots = {
-            player: remaining_counts[player]
-            for player in opponents
-        }
+        slots = {player: remaining_counts[player] for player in opponents}
 
         def can_still_fill(start_index: int) -> bool:
             remaining_cards = ordered_cards[start_index:]
@@ -241,8 +238,7 @@ class HiddenStateSampler:
                 if slots[player] <= 0:
                     continue
                 compatible = sum(
-                    player in candidate_holders[card]
-                    for card in remaining_cards
+                    player in candidate_holders[card] for card in remaining_cards
                 )
                 if compatible < slots[player]:
                     return False
@@ -254,9 +250,7 @@ class HiddenStateSampler:
 
             card = ordered_cards[index]
             holders = [
-                player
-                for player in candidate_holders[card]
-                if slots[player] > 0
+                player for player in candidate_holders[card] if slots[player] > 0
             ]
             self.rng.shuffle(holders)
 
