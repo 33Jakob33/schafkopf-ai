@@ -164,6 +164,12 @@ class HiddenStateSampler:
                 tuple(current_hands[player]) + tuple(played_by_player[player])
                 for player in range(4)
             )
+            if not self._respects_contract_legality(
+                observation=observation,
+                initial_hands=initial_hands,
+            ):
+                continue
+
             determinization = Determinization(initial_hands=initial_hands)
 
             try:
@@ -229,6 +235,29 @@ class HiddenStateSampler:
                 elif card.suit in plain_suits[player]:
                     return False
         return True
+
+    @staticmethod
+    def _respects_contract_legality(
+        *,
+        observation: PlayerObservation,
+        initial_hands: tuple[tuple[Card, ...], ...],
+    ) -> bool:
+        contract = observation.contract
+        if contract.game_type is not GameType.SAUSPIEL:
+            return True
+        if contract.declarer is None or contract.called_suit is None:
+            return False
+
+        declarer_hand = initial_hands[contract.declarer]
+        called_ace = Card(contract.called_suit, Rank.ACE)
+        if called_ace in declarer_hand:
+            return False
+
+        return any(
+            card.suit is contract.called_suit
+            and card.rank not in {Rank.OBER, Rank.UNTER}
+            for card in declarer_hand
+        )
 
     @staticmethod
     def _respects_called_ace_knowledge(
