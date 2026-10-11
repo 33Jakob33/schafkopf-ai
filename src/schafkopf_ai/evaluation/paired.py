@@ -9,10 +9,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from schafkopf_ai.agents.agent import Agent
-from schafkopf_ai.agents.heuristic_agent import HeuristicAgent
+from schafkopf_ai.agents.heuristic_agent import HeuristicAgent, HeuristicConfig
+from schafkopf_ai.agents.heuristic_bidding import (
+    BIDDING_PROFILES,
+    bidding_config_for_profile,
+)
 from schafkopf_ai.agents.heuristic_bidding_random_card_agent import (
     HeuristicBiddingRandomCardAgent,
 )
+from schafkopf_ai.agents.multihead_card_play_agent import MultiHeadCardPlayAgent
 from schafkopf_ai.agents.neural_card_play_agent import NeuralCardPlayAgent
 from schafkopf_ai.agents.ppo_card_play_agent import PPOCardPlayAgent
 from schafkopf_ai.agents.random_agent import RandomAgent
@@ -121,6 +126,11 @@ def _load_neural(checkpoint: Path | None, device: str) -> Agent:
     return NeuralCardPlayAgent.from_checkpoint(path, device=device)
 
 
+def _load_multihead(checkpoint: Path | None, device: str) -> Agent:
+    path = _checkpoint_required(checkpoint, kind="multihead")
+    return MultiHeadCardPlayAgent.from_checkpoint(path, device=device)
+
+
 def _load_specialist(checkpoint: Path | None, device: str) -> Agent:
     path = _checkpoint_required(checkpoint, kind="specialist")
     return SpecialistCardPlayAgent.from_manifest(path, device=device)
@@ -142,6 +152,7 @@ AGENT_LOADERS: dict[str, AgentLoader] = {
     "bc": _load_neural,
     "dagger": _load_neural,
     "neural": _load_neural,
+    "multihead": _load_multihead,
     "ppo": _load_ppo,
     "specialist": _load_specialist,
 }
@@ -155,6 +166,7 @@ def load_evaluation_agent(
     spec: EvaluationAgentSpec,
     *,
     device: str,
+    bidding_profile: str = "baseline",
 ) -> Agent:
     kind = spec.kind.lower()
     try:
@@ -166,7 +178,17 @@ def load_evaluation_agent(
             f"Supported kinds: {supported}."
         ) from exc
 
-    return loader(spec.checkpoint, device)
+    agent = loader(spec.checkpoint, device)
+
+    bidding_config = bidding_config_for_profile(bidding_profile)
+    configured_bidder = HeuristicAgent(
+        config=HeuristicConfig(bidding=bidding_config)
+    )
+    if isinstance(agent, HeuristicAgent):
+        return configured_bidder
+    if hasattr(agent, "bidding_agent"):
+        agent.bidding_agent = configured_bidder
+    return agent
 
 
 def validate_round(result: RoundResult) -> None:
@@ -186,10 +208,18 @@ def run_paired_variant(
     game_index: int,
     master_seed: int,
     opponent_mode: str = "heuristic-bid-random-card",
+    bidding_profile: str = "baseline",
 ) -> RoundResult:
     focal_seat = game_index % 4
     starting_player = (game_index // 4) % 4
     deal_seed = master_seed + game_index * 1_009 + 1
+
+    if bidding_profile not in BIDDING_PROFILES:
+        raise ValueError(
+            f"Unsupported bidding profile {bidding_profile!r}; "
+            f"expected one of {BIDDING_PROFILES}."
+        )
+    bidding_config = bidding_config_for_profile(bidding_profile)
 
     if opponent_mode not in OPPONENT_MODES:
         raise ValueError(
@@ -205,7 +235,12 @@ def run_paired_variant(
             opponent_seed = master_seed + game_index * 10_007 + seat * 101 + 50_000
             opponent_rng = random.Random(opponent_seed)
             if opponent_mode == "heuristic-bid-random-card":
-                agents.append(HeuristicBiddingRandomCardAgent(rng=opponent_rng))
+                agents.append(
+                    HeuristicBiddingRandomCardAgent(
+                        rng=opponent_rng,
+                        bidding_config=bidding_config,
+                    )
+                )
             else:
                 agents.append(RandomAgent(rng=opponent_rng))
 
@@ -229,14 +264,23 @@ def evaluate_paired_agents(
     progress_every: int = 0,
     progress_callback: Callable[[int, PairedStats], None] | None = None,
     opponent_mode: str = "heuristic-bid-random-card",
+    bidding_profile: str = "baseline",
 ) -> PairedEvaluationResult:
     if games <= 0:
         raise ValueError("games must be greater than zero.")
     if progress_every < 0:
         raise ValueError("progress_every cannot be negative.")
 
-    reference = load_evaluation_agent(reference_spec, device=device)
-    candidate = load_evaluation_agent(candidate_spec, device=device)
+    reference = load_evaluation_agent(
+        reference_spec,
+        device=device,
+        bidding_profile=bidding_profile,
+    )
+    candidate = load_evaluation_agent(
+        candidate_spec,
+        device=device,
+        bidding_profile=bidding_profile,
+    )
 
     overall = PairedStats()
     by_contract: dict[GameType, PairedStats] = defaultdict(PairedStats)
@@ -254,6 +298,7 @@ def evaluate_paired_agents(
             game_index=game_index,
             master_seed=seed,
             opponent_mode=opponent_mode,
+            bidding_profile=bidding_profile,
         )
         candidate_result = run_paired_variant(
             focal_agent=candidate,
