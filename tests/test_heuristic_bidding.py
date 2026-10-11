@@ -179,8 +179,6 @@ def test_exceptionally_strong_solo_can_beat_sauspiel_margin() -> None:
     assert choice is not None
     assert choice.contract == solo
 
-
-
 def test_conservative_bidding_profile_is_stricter_for_wenz() -> None:
     baseline = bidding_config_for_profile("baseline")
     conservative = bidding_config_for_profile("conservative")
