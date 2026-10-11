@@ -70,3 +70,47 @@ def test_hidden_state_sampler_does_not_assign_sauspiel_ace_to_declarer() -> None
     for determinization in determinizations:
         rebuilt = determinization.build_state(observation)
         assert rebuilt.called_ace_player != 0
+
+
+
+def test_hidden_state_sampler_handles_late_sauspiel_information() -> None:
+    called_suit = Suit.EICHEL
+    called_ace = Card(called_suit, Rank.ACE)
+    deck = Deck()
+    remaining = [card for card in deck.cards if card != called_ace]
+
+    hands = (
+        tuple(remaining[:8]),
+        (called_ace,) + tuple(remaining[8:15]),
+        tuple(remaining[15:23]),
+        tuple(remaining[23:31]),
+    )
+    state = GameState.from_hands(
+        hands=hands,
+        contract=GameContract(
+            GameType.SAUSPIEL,
+            called_suit=called_suit,
+            declarer=0,
+        ),
+        starting_player=0,
+    )
+
+    for _ in range(20):
+        player = state.current_player
+        assert player is not None
+        state.play_card(player, state.legal_moves(player)[0])
+
+    player = state.current_player
+    assert player is not None
+    observation = state.observation_for(player)
+
+    sampler = HiddenStateSampler(
+        rng=random.Random(20261011),
+        max_attempts_per_sample=50,
+    )
+    determinizations = sampler.sample_many(observation, 8)
+
+    assert len(determinizations) == 8
+    for determinization in determinizations:
+        rebuilt = determinization.build_state(observation)
+        assert rebuilt.observation_for(player) == observation
