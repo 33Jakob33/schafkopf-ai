@@ -60,9 +60,7 @@ class MonteCarloActionEvaluator:
             observation,
             self.samples_per_action,
         )
-        payments_by_card: dict[Card, list[int]] = {
-            card: [] for card in legal_cards
-        }
+        payments_by_card: dict[Card, list[int]] = {card: [] for card in legal_cards}
 
         for determinization in determinizations:
             for card in legal_cards:
