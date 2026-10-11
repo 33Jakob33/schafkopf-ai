@@ -9,8 +9,8 @@ from schafkopf_ai.game.observation import PlayerObservation
 from .agent import Agent
 from .heuristic_agent import HeuristicAgent, HeuristicConfig
 from .heuristic_bidding import (
-    BiddingHeuristicConfig,
     DEFAULT_BIDDING_HEURISTIC_CONFIG,
+    BiddingHeuristicConfig,
 )
 from .random_agent import RandomAgent
 
