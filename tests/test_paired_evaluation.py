@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from schafkopf_ai.agents.heuristic_agent import HeuristicAgent
+from schafkopf_ai.agents.rollout_card_play_agent import RolloutCardPlayAgent
 from schafkopf_ai.evaluation.paired import (
     EvaluationAgentSpec,
     PairedStats,
@@ -34,6 +35,7 @@ def test_default_agent_registry_contains_current_training_methods() -> None:
     assert "bc" in kinds
     assert "dagger" in kinds
     assert "ppo" in kinds
+    assert "rollout" in kinds
 
 
 def test_load_heuristic_agent_without_checkpoint() -> None:
@@ -43,6 +45,21 @@ def test_load_heuristic_agent_without_checkpoint() -> None:
     )
 
     assert isinstance(agent, HeuristicAgent)
+
+
+def test_load_rollout_agent_without_checkpoint() -> None:
+    agent = load_evaluation_agent(
+        EvaluationAgentSpec(
+            kind="rollout",
+            name="Rollout",
+            rollout_samples=2,
+            rollout_seed=77,
+        ),
+        device="cpu",
+    )
+
+    assert isinstance(agent, RolloutCardPlayAgent)
+    assert agent.evaluator.samples_per_action == 2
 
 
 def test_heuristic_agent_rejects_checkpoint() -> None:
