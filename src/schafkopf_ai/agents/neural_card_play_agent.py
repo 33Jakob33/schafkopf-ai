@@ -77,13 +77,10 @@ class NeuralCardPlayAgent(Agent):
         action_count = int(checkpoint.get("action_count", ACTION_COUNT))
         hidden_sizes_raw = checkpoint.get("hidden_sizes", (512, 256))
 
-        if (
-            not isinstance(hidden_sizes_raw, (tuple, list))
-            or len(hidden_sizes_raw) != 2
-        ):
-            raise ValueError("Checkpoint hidden_sizes must contain exactly two values.")
+        if not isinstance(hidden_sizes_raw, (tuple, list)) or len(hidden_sizes_raw) < 2:
+            raise ValueError("Checkpoint hidden_sizes must contain at least two values.")
 
-        hidden_sizes = (int(hidden_sizes_raw[0]), int(hidden_sizes_raw[1]))
+        hidden_sizes = tuple(int(value) for value in hidden_sizes_raw)
         gru_hidden_size = int(checkpoint.get("gru_hidden_size") or 128)
 
         observation_version = resolve_checkpoint_observation_version(
@@ -96,9 +93,9 @@ class NeuralCardPlayAgent(Agent):
         architecture = checkpoint.get("architecture", expected_architecture)
         if not isinstance(architecture, str):
             raise TypeError("Checkpoint architecture must be a string.")
-        if architecture != expected_architecture:
+        if observation_version == "v3" and architecture != expected_architecture:
             raise ValueError(
-                "Checkpoint architecture does not match its observation version: "
+                "V3 checkpoint architecture does not match its observation version: "
                 f"{architecture} != {expected_architecture}."
             )
 
@@ -113,6 +110,7 @@ class NeuralCardPlayAgent(Agent):
             hidden_sizes=hidden_sizes,
             gru_hidden_size=gru_hidden_size,
             action_count=action_count,
+            architecture=architecture,
         )
         if model.observation_version != observation_version:
             raise RuntimeError("Checkpoint observation version could not be restored.")
