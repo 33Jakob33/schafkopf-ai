@@ -36,11 +36,7 @@ def test_hidden_state_sample_reconstructs_same_observation() -> None:
 
     assert rebuilt.observation_for(player) == observation
     assert rebuilt.player(player).cards == observation.hand
-    all_cards = [
-        card
-        for hand in determinization.initial_hands
-        for card in hand
-    ]
+    all_cards = [card for hand in determinization.initial_hands for card in hand]
     assert len(all_cards) == 32
     assert len(set(all_cards)) == 32
 
