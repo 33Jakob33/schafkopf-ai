@@ -178,7 +178,9 @@ def load_initial_weights(
     raw_hidden_sizes = checkpoint.get("hidden_sizes", model.hidden_sizes)
 
     if not isinstance(raw_hidden_sizes, (tuple, list)) or len(raw_hidden_sizes) < 2:
-        raise ValueError("Initial checkpoint hidden_sizes must contain at least two values.")
+        raise ValueError(
+            "Initial checkpoint hidden_sizes must contain at least two values."
+        )
 
     hidden_sizes = tuple(int(value) for value in raw_hidden_sizes)
 
