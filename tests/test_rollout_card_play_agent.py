@@ -30,8 +30,7 @@ def test_action_evaluator_returns_payment_samples_for_each_card() -> None:
     assert tuple(estimate.card for estimate in estimates) == legal_cards
     assert all(len(estimate.payments) == 2 for estimate in estimates)
     assert all(
-        estimate.mean_payment == sum(estimate.payments) / 2
-        for estimate in estimates
+        estimate.mean_payment == sum(estimate.payments) / 2 for estimate in estimates
     )
 
 
