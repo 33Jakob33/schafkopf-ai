@@ -16,9 +16,11 @@ class RoleBehaviorCloningDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]])
     """Behavior-cloning dataset that additionally exposes each example's role."""
 
     def __init__(self, arrays: BehaviorCloningArrays) -> None:
-        if arrays.role_ids is None:
+        role_ids = arrays.role_ids
+        if role_ids is None:
             raise ValueError("Role-aware training requires role_ids in the dataset.")
         self.arrays = arrays
+        self.role_ids = role_ids
 
     def __len__(self) -> int:
         return self.arrays.example_count
@@ -27,7 +29,7 @@ class RoleBehaviorCloningDataset(Dataset[tuple[Tensor, Tensor, Tensor, Tensor]])
         features = torch.from_numpy(self.arrays.features[index]).to(torch.float32)
         legal_mask = torch.from_numpy(self.arrays.legal_masks[index]).to(torch.bool)
         target = torch.tensor(int(self.arrays.targets[index]), dtype=torch.long)
-        role = torch.tensor(int(self.arrays.role_ids[index]), dtype=torch.long)
+        role = torch.tensor(int(self.role_ids[index]), dtype=torch.long)
         return features, legal_mask, target, role
 
 
