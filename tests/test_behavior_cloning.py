@@ -56,8 +56,6 @@ def test_card_play_policy_network_has_32_logits() -> None:
     assert logits.shape == (3, ACTION_COUNT)
 
 
-
-
 def test_deep_card_play_policy_network_supports_three_hidden_layers() -> None:
     model = DeepCardPlayPolicyNetwork(
         input_size=222,
