@@ -4,7 +4,7 @@ import random
 from dataclasses import dataclass
 
 from schafkopf_ai.agents.heuristic_knowledge import infer_voids
-from schafkopf_ai.game.card import Card, Rank
+from schafkopf_ai.game.card import Card, Rank, Suit
 from schafkopf_ai.game.deck import Deck
 from schafkopf_ai.game.game_state import GameState
 from schafkopf_ai.game.game_type import GameType
@@ -216,7 +216,7 @@ class HiddenStateSampler:
         *,
         observation: PlayerObservation,
         current_hands: list[list[Card]],
-        plain_suits: tuple[frozenset[object], ...],
+        plain_suits: tuple[frozenset[Suit], ...],
         trump_void_players: frozenset[int],
     ) -> bool:
         for player, hand in enumerate(current_hands):
