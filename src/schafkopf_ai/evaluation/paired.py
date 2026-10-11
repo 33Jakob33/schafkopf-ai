@@ -184,7 +184,15 @@ def load_evaluation_agent(
     configured_bidder = HeuristicAgent(config=HeuristicConfig(bidding=bidding_config))
     if isinstance(agent, HeuristicAgent):
         return configured_bidder
-    if hasattr(agent, "bidding_agent"):
+    if isinstance(
+        agent,
+        (
+            NeuralCardPlayAgent,
+            MultiHeadCardPlayAgent,
+            PPOCardPlayAgent,
+            SpecialistCardPlayAgent,
+        ),
+    ):
         agent.bidding_agent = configured_bidder
     return agent
 
