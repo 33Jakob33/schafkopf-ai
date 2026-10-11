@@ -7,7 +7,11 @@ from schafkopf_ai.game.card import Card
 from schafkopf_ai.game.observation import PlayerObservation
 
 from .agent import Agent
-from .heuristic_agent import HeuristicAgent
+from .heuristic_agent import HeuristicAgent, HeuristicConfig
+from .heuristic_bidding import (
+    BiddingHeuristicConfig,
+    DEFAULT_BIDDING_HEURISTIC_CONFIG,
+)
 from .random_agent import RandomAgent
 
 
@@ -20,8 +24,15 @@ class HeuristicBiddingRandomCardAgent(Agent):
     remains stochastic and intentionally weak.
     """
 
-    def __init__(self, rng: random.Random | None = None) -> None:
-        self.bidding_agent = HeuristicAgent()
+    def __init__(
+        self,
+        rng: random.Random | None = None,
+        *,
+        bidding_config: BiddingHeuristicConfig = DEFAULT_BIDDING_HEURISTIC_CONFIG,
+    ) -> None:
+        self.bidding_agent = HeuristicAgent(
+            config=HeuristicConfig(bidding=bidding_config)
+        )
         self.card_agent = RandomAgent(rng=rng)
 
     def choose_bidding_action(
