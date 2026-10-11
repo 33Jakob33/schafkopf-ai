@@ -27,7 +27,7 @@ DEFAULT_BIDDING_HEURISTIC_CONFIG = BiddingHeuristicConfig()
 # "realistic": users should calibrate it against their desired table/rule set.
 CONSERVATIVE_BIDDING_HEURISTIC_CONFIG = BiddingHeuristicConfig(
     sauspiel_min_confidence=0.50,
-    wenz_min_confidence=0.72,
+    wenz_min_confidence=0.76,
     geier_min_confidence=0.72,
     solo_min_confidence=0.70,
     solo_margin=0.12,
