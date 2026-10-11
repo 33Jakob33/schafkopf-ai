@@ -72,7 +72,6 @@ def test_hidden_state_sampler_does_not_assign_sauspiel_ace_to_declarer() -> None
         assert rebuilt.called_ace_player != 0
 
 
-
 def test_hidden_state_sampler_handles_late_sauspiel_information() -> None:
     called_suit = Suit.EICHEL
     called_ace = Card(called_suit, Rank.ACE)
