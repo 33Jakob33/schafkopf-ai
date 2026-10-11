@@ -21,6 +21,7 @@ from schafkopf_ai.agents.multihead_card_play_agent import MultiHeadCardPlayAgent
 from schafkopf_ai.agents.neural_card_play_agent import NeuralCardPlayAgent
 from schafkopf_ai.agents.ppo_card_play_agent import PPOCardPlayAgent
 from schafkopf_ai.agents.random_agent import RandomAgent
+from schafkopf_ai.agents.rollout_card_play_agent import RolloutCardPlayAgent
 from schafkopf_ai.agents.specialist_card_play_agent import SpecialistCardPlayAgent
 from schafkopf_ai.game.game_type import GameType
 from schafkopf_ai.game.rules import RAMSCH_RULES
@@ -40,6 +41,9 @@ class EvaluationAgentSpec:
     kind: str
     name: str
     checkpoint: Path | None = None
+    rollout_samples: int = 8
+    rollout_seed: int = 0
+    rollout_max_sampling_attempts: int = 5_000
 
 
 @dataclass(slots=True)
@@ -159,7 +163,7 @@ AGENT_LOADERS: dict[str, AgentLoader] = {
 
 
 def available_agent_kinds() -> tuple[str, ...]:
-    return tuple(sorted(AGENT_LOADERS))
+    return tuple(sorted((*AGENT_LOADERS, "rollout")))
 
 
 def load_evaluation_agent(
@@ -178,7 +182,16 @@ def load_evaluation_agent(
             f"Supported kinds: {supported}."
         ) from exc
 
-    agent = loader(spec.checkpoint, device)
+    if kind == "rollout":
+        if spec.checkpoint is not None:
+            raise ValueError("RolloutCardPlayAgent does not use a checkpoint.")
+        agent: Agent = RolloutCardPlayAgent(
+            samples_per_action=spec.rollout_samples,
+            seed=spec.rollout_seed,
+            max_sampling_attempts=spec.rollout_max_sampling_attempts,
+        )
+    else:
+        agent = loader(spec.checkpoint, device)
 
     bidding_config = bidding_config_for_profile(bidding_profile)
     configured_bidder = HeuristicAgent(config=HeuristicConfig(bidding=bidding_config))
@@ -191,6 +204,7 @@ def load_evaluation_agent(
             MultiHeadCardPlayAgent,
             PPOCardPlayAgent,
             SpecialistCardPlayAgent,
+            RolloutCardPlayAgent,
         ),
     ):
         agent.bidding_agent = configured_bidder
