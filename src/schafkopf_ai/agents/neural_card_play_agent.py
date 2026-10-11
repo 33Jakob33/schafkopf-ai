@@ -78,7 +78,9 @@ class NeuralCardPlayAgent(Agent):
         hidden_sizes_raw = checkpoint.get("hidden_sizes", (512, 256))
 
         if not isinstance(hidden_sizes_raw, (tuple, list)) or len(hidden_sizes_raw) < 2:
-            raise ValueError("Checkpoint hidden_sizes must contain at least two values.")
+            raise ValueError(
+                "Checkpoint hidden_sizes must contain at least two values."
+            )
 
         hidden_sizes = tuple(int(value) for value in hidden_sizes_raw)
         gru_hidden_size = int(checkpoint.get("gru_hidden_size") or 128)
