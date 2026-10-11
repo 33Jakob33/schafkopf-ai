@@ -260,9 +260,9 @@ def parse_args() -> argparse.Namespace:
         choices=OPPONENT_MODES,
         default="heuristic-bid-random-card",
         help=(
-            "Opponent policy. The default keeps bidding heuristic/realistic "
-            "while randomizing only opponent card play; 'random' reproduces "
-            "the legacy fully-random opponent evaluation."
+            "Opponent policy. 'heuristic' uses heuristic bidding and card play; "
+            "the default keeps heuristic bidding but randomizes opponent card "
+            "play; 'random' reproduces the legacy fully-random evaluation."
         ),
     )
     return parser.parse_args()
