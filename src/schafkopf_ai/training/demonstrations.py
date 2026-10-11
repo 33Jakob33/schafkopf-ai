@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from schafkopf_ai.agents.heuristic_agent import HeuristicAgent
+from schafkopf_ai.agents.heuristic_agent import HeuristicAgent, HeuristicConfig
 from schafkopf_ai.game.card import Card
 from schafkopf_ai.game.observation import PlayerObservation
 
@@ -117,8 +117,9 @@ class RecordingHeuristicAgent(HeuristicAgent):
         *,
         collector: BehaviorCloningCollector,
         game_id: int,
+        config: HeuristicConfig | None = None,
     ) -> None:
-        super().__init__()
+        super().__init__(config=config)
         self.collector = collector
         self.game_id = game_id
 
