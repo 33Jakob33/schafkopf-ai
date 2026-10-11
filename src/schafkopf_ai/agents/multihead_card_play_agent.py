@@ -50,7 +50,10 @@ class MultiHeadCardPlayAgent(Agent):
         )
         if not isinstance(checkpoint, dict):
             raise TypeError("Multi-head checkpoint must be a dictionary.")
-        if checkpoint.get("architecture") != MultiHeadCardPlayPolicyNetwork.architecture:
+        if (
+            checkpoint.get("architecture")
+            != MultiHeadCardPlayPolicyNetwork.architecture
+        ):
             raise ValueError("Checkpoint is not a multi-head card-play policy.")
 
         input_size = int(checkpoint.get("input_size", OBSERVATION_V2_FEATURE_SIZE))
