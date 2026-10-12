@@ -35,6 +35,7 @@ def test_default_agent_registry_contains_current_training_methods() -> None:
     assert "bc" in kinds
     assert "dagger" in kinds
     assert "ppo" in kinds
+    assert "q" in kinds
     assert "rollout" in kinds
 
 
