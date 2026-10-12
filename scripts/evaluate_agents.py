@@ -15,6 +15,7 @@ from schafkopf_ai.evaluation.paired import (
     evaluate_paired_agents,
 )
 from schafkopf_ai.game.game_type import GameType
+from schafkopf_ai.search.rollout import CONTINUATION_PROFILES
 from schafkopf_ai.training.card_play_roles import CardPlayRole
 
 
@@ -26,6 +27,7 @@ def _default_name(kind: str) -> str:
         "neural": "Neural",
         "multihead": "MultiHead",
         "ppo": "PPO",
+        "q": "Q",
         "rollout": "Rollout",
         "specialist": "Specialist",
     }
@@ -39,11 +41,15 @@ def run_evaluation(
     reference_name: str | None,
     reference_rollout_samples: int,
     reference_rollout_seed: int,
+    reference_rollout_continuation_profile: str,
+    reference_rollout_epsilon: float,
     candidate_kind: str,
     candidate_checkpoint: Path | None,
     candidate_name: str | None,
     candidate_rollout_samples: int,
     candidate_rollout_seed: int,
+    candidate_rollout_continuation_profile: str,
+    candidate_rollout_epsilon: float,
     games: int,
     seed: int,
     progress_every: int,
@@ -57,6 +63,8 @@ def run_evaluation(
         checkpoint=reference_checkpoint,
         rollout_samples=reference_rollout_samples,
         rollout_seed=reference_rollout_seed,
+        rollout_continuation_profile=reference_rollout_continuation_profile,
+        rollout_epsilon=reference_rollout_epsilon,
     )
     candidate = EvaluationAgentSpec(
         kind=candidate_kind,
@@ -64,6 +72,8 @@ def run_evaluation(
         checkpoint=candidate_checkpoint,
         rollout_samples=candidate_rollout_samples,
         rollout_seed=candidate_rollout_seed,
+        rollout_continuation_profile=candidate_rollout_continuation_profile,
+        rollout_epsilon=candidate_rollout_epsilon,
     )
 
     start = time.perf_counter()
@@ -111,9 +121,19 @@ def run_evaluation(
     if reference_kind.lower() == "rollout":
         print(f"Reference rollout samples:  {reference_rollout_samples}")
         print(f"Reference rollout seed:     {reference_rollout_seed}")
+        print(
+            "Reference rollout profile:  "
+            f"{reference_rollout_continuation_profile}"
+        )
+        print(f"Reference rollout epsilon:  {reference_rollout_epsilon:.3f}")
     if candidate_kind.lower() == "rollout":
         print(f"Candidate rollout samples:  {candidate_rollout_samples}")
         print(f"Candidate rollout seed:     {candidate_rollout_seed}")
+        print(
+            "Candidate rollout profile:  "
+            f"{candidate_rollout_continuation_profile}"
+        )
+        print(f"Candidate rollout epsilon:  {candidate_rollout_epsilon:.3f}")
     print(f"Seed:                       {seed}")
     print(f"Opponent mode:              {opponent_mode}")
     print(f"Bidding profile:            {bidding_profile}")
@@ -215,6 +235,16 @@ def parse_args() -> argparse.Namespace:
         help="Hidden-state sampling seed when reference-kind=rollout.",
     )
     parser.add_argument(
+        "--reference-rollout-continuation-profile",
+        choices=CONTINUATION_PROFILES,
+        default="heuristic",
+    )
+    parser.add_argument(
+        "--reference-rollout-epsilon",
+        type=float,
+        default=0.10,
+    )
+    parser.add_argument(
         "--candidate-kind",
         required=True,
         help=f"Candidate agent kind. Registered kinds: {supported}.",
@@ -241,6 +271,16 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=2001,
         help="Hidden-state sampling seed when candidate-kind=rollout.",
+    )
+    parser.add_argument(
+        "--candidate-rollout-continuation-profile",
+        choices=CONTINUATION_PROFILES,
+        default="heuristic",
+    )
+    parser.add_argument(
+        "--candidate-rollout-epsilon",
+        type=float,
+        default=0.10,
     )
     parser.add_argument("--games", type=int, default=10_000)
     parser.add_argument("--seed", type=int, default=123)
@@ -276,11 +316,19 @@ def main() -> None:
         reference_name=args.reference_name,
         reference_rollout_samples=args.reference_rollout_samples,
         reference_rollout_seed=args.reference_rollout_seed,
+        reference_rollout_continuation_profile=(
+            args.reference_rollout_continuation_profile
+        ),
+        reference_rollout_epsilon=args.reference_rollout_epsilon,
         candidate_kind=args.candidate_kind,
         candidate_checkpoint=args.candidate_checkpoint,
         candidate_name=args.candidate_name,
         candidate_rollout_samples=args.candidate_rollout_samples,
         candidate_rollout_seed=args.candidate_rollout_seed,
+        candidate_rollout_continuation_profile=(
+            args.candidate_rollout_continuation_profile
+        ),
+        candidate_rollout_epsilon=args.candidate_rollout_epsilon,
         games=args.games,
         seed=args.seed,
         progress_every=args.progress_every,
