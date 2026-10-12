@@ -49,6 +49,8 @@ class EvaluationAgentSpec:
     rollout_samples: int = 8
     rollout_seed: int = 0
     rollout_max_sampling_attempts: int = 5_000
+    rollout_continuation_profile: str = "heuristic"
+    rollout_epsilon: float = 0.10
 
 
 @dataclass(slots=True)
@@ -192,6 +194,8 @@ def load_evaluation_agent(
             samples_per_action=spec.rollout_samples,
             seed=spec.rollout_seed,
             max_sampling_attempts=spec.rollout_max_sampling_attempts,
+            continuation_profile=spec.rollout_continuation_profile,
+            epsilon=spec.rollout_epsilon,
         )
     else:
         try:
