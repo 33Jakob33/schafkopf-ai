@@ -140,10 +140,7 @@ class MonteCarloActionEvaluator:
 
         for sample_index, determinization in enumerate(determinizations):
             continuation_seed = (
-                self.seed
-                + evaluation_index * 1_000_003
-                + sample_index * 10_007
-                + 97
+                self.seed + evaluation_index * 1_000_003 + sample_index * 10_007 + 97
             )
             continuation_kind = continuation_kinds[sample_index]
 
@@ -166,7 +163,9 @@ class MonteCarloActionEvaluator:
                 ActionValueEstimate(
                     card=card,
                     mean_payment=statistics.fmean(payments),
-                    std_payment=statistics.stdev(payments) if len(payments) > 1 else 0.0,
+                    std_payment=statistics.stdev(payments)
+                    if len(payments) > 1
+                    else 0.0,
                     sample_count=len(payments),
                     payments=payments,
                 )
@@ -178,7 +177,9 @@ class MonteCarloActionEvaluator:
         if self.continuation_profile == "heuristic":
             return tuple("heuristic" for _ in range(count))
 
-        return tuple(_MIXED_SCHEDULE[index % len(_MIXED_SCHEDULE)] for index in range(count))
+        return tuple(
+            _MIXED_SCHEDULE[index % len(_MIXED_SCHEDULE)] for index in range(count)
+        )
 
     @staticmethod
     def _rollout_payment(
