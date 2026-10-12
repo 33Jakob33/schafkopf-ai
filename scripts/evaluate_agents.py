@@ -121,18 +121,12 @@ def run_evaluation(
     if reference_kind.lower() == "rollout":
         print(f"Reference rollout samples:  {reference_rollout_samples}")
         print(f"Reference rollout seed:     {reference_rollout_seed}")
-        print(
-            "Reference rollout profile:  "
-            f"{reference_rollout_continuation_profile}"
-        )
+        print(f"Reference rollout profile:  {reference_rollout_continuation_profile}")
         print(f"Reference rollout epsilon:  {reference_rollout_epsilon:.3f}")
     if candidate_kind.lower() == "rollout":
         print(f"Candidate rollout samples:  {candidate_rollout_samples}")
         print(f"Candidate rollout seed:     {candidate_rollout_seed}")
-        print(
-            "Candidate rollout profile:  "
-            f"{candidate_rollout_continuation_profile}"
-        )
+        print(f"Candidate rollout profile:  {candidate_rollout_continuation_profile}")
         print(f"Candidate rollout epsilon:  {candidate_rollout_epsilon:.3f}")
     print(f"Seed:                       {seed}")
     print(f"Opponent mode:              {opponent_mode}")
