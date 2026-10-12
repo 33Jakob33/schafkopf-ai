@@ -20,6 +20,7 @@ from schafkopf_ai.agents.heuristic_bidding_random_card_agent import (
 from schafkopf_ai.agents.multihead_card_play_agent import MultiHeadCardPlayAgent
 from schafkopf_ai.agents.neural_card_play_agent import NeuralCardPlayAgent
 from schafkopf_ai.agents.ppo_card_play_agent import PPOCardPlayAgent
+from schafkopf_ai.agents.q_card_play_agent import QCardPlayAgent
 from schafkopf_ai.agents.random_agent import RandomAgent
 from schafkopf_ai.agents.rollout_card_play_agent import RolloutCardPlayAgent
 from schafkopf_ai.agents.specialist_card_play_agent import SpecialistCardPlayAgent
@@ -139,6 +140,11 @@ def _load_multihead(checkpoint: Path | None, device: str) -> Agent:
     return MultiHeadCardPlayAgent.from_checkpoint(path, device=device)
 
 
+def _load_q(checkpoint: Path | None, device: str) -> Agent:
+    path = _checkpoint_required(checkpoint, kind="q")
+    return QCardPlayAgent.from_checkpoint(path, device=device)
+
+
 def _load_specialist(checkpoint: Path | None, device: str) -> Agent:
     path = _checkpoint_required(checkpoint, kind="specialist")
     return SpecialistCardPlayAgent.from_manifest(path, device=device)
@@ -162,6 +168,7 @@ AGENT_LOADERS: dict[str, AgentLoader] = {
     "neural": _load_neural,
     "multihead": _load_multihead,
     "ppo": _load_ppo,
+    "q": _load_q,
     "specialist": _load_specialist,
 }
 
@@ -207,6 +214,7 @@ def load_evaluation_agent(
             NeuralCardPlayAgent,
             MultiHeadCardPlayAgent,
             PPOCardPlayAgent,
+            QCardPlayAgent,
             SpecialistCardPlayAgent,
             RolloutCardPlayAgent,
         ),
