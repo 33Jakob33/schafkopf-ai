@@ -59,9 +59,7 @@ class QCardPlayAgent(Agent):
         if checkpoint.get("architecture") != CardPlayQNetwork.architecture:
             raise ValueError("Checkpoint is not a card-play Q network.")
 
-        input_size = int(
-            checkpoint.get("input_size", OBSERVATION_V2_FEATURE_SIZE)
-        )
+        input_size = int(checkpoint.get("input_size", OBSERVATION_V2_FEATURE_SIZE))
         hidden_raw = checkpoint.get("hidden_sizes", (512, 256))
         if not isinstance(hidden_raw, (tuple, list)) or len(hidden_raw) != 2:
             raise ValueError("Q checkpoint hidden_sizes must contain two values.")
