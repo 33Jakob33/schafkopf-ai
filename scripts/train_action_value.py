@@ -82,9 +82,7 @@ def _masked_q_loss(
 def _run_epoch(
     *,
     model: CardPlayQNetwork,
-    loader: DataLoader[
-        tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]
-    ],
+    loader: DataLoader[tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]],
     device: torch.device,
     optimizer: AdamW | None,
     target_scale: float,
@@ -278,12 +276,9 @@ def train(
             f"| {elapsed:>7.1f}s"
         )
 
-        improved = (
-            validation_metrics.action_accuracy > best_action_accuracy
-            or (
-                validation_metrics.action_accuracy == best_action_accuracy
-                and validation_metrics.mae_payment < best_mae
-            )
+        improved = validation_metrics.action_accuracy > best_action_accuracy or (
+            validation_metrics.action_accuracy == best_action_accuracy
+            and validation_metrics.mae_payment < best_mae
         )
         if improved:
             best_action_accuracy = validation_metrics.action_accuracy
