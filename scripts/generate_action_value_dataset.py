@@ -168,9 +168,7 @@ def run_generation(
     save_action_value_arrays(output, arrays)
 
     elapsed = time.perf_counter() - start
-    disagreement = int(
-        (arrays.heuristic_actions != arrays.rollout_actions).sum()
-    )
+    disagreement = int((arrays.heuristic_actions != arrays.rollout_actions).sum())
     legal_q = arrays.q_values[arrays.legal_masks]
     legal_std = arrays.q_stds[arrays.legal_masks]
 
@@ -188,10 +186,7 @@ def run_generation(
     print(f"Mean Q target:              {float(legal_q.mean()):+.3f}")
     print(f"Mean Q target std:          {float(legal_std.mean()):.3f}")
     print(f"Teacher disagreements:      {disagreement:,}")
-    print(
-        "Disagreement share:        "
-        f"{disagreement / arrays.example_count:.2%}"
-    )
+    print(f"Disagreement share:        {disagreement / arrays.example_count:.2%}")
     print(f"Seed:                       {seed}")
     print(f"Elapsed:                    {elapsed:.3f} s")
     print(f"Output:                     {output}")
@@ -207,10 +202,7 @@ def run_generation(
     print("-" * 88)
     for role in CardPlayRole:
         count = int((arrays.role_ids == int(role)).sum())
-        print(
-            f"{role.key:<24} {count:>9,}  "
-            f"({count / arrays.example_count:>7.2%})"
-        )
+        print(f"{role.key:<24} {count:>9,}  ({count / arrays.example_count:>7.2%})")
 
 
 def parse_args() -> argparse.Namespace:
