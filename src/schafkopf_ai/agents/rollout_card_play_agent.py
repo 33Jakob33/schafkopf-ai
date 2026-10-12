@@ -24,12 +24,16 @@ class RolloutCardPlayAgent(Agent):
         samples_per_action: int = 8,
         seed: int = 0,
         max_sampling_attempts: int = 5_000,
+        continuation_profile: str = "heuristic",
+        epsilon: float = 0.10,
         bidding_agent: Agent | None = None,
     ) -> None:
         self.evaluator = MonteCarloActionEvaluator(
             samples_per_action=samples_per_action,
             seed=seed,
             max_sampling_attempts=max_sampling_attempts,
+            continuation_profile=continuation_profile,
+            epsilon=epsilon,
         )
         self.bidding_agent = (
             HeuristicAgent() if bidding_agent is None else bidding_agent
