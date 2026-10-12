@@ -179,9 +179,7 @@ class ActionValueCollector:
 
         best_value = max(estimate.mean_payment for estimate in estimates)
         best_cards = tuple(
-            card
-            for card in legal_cards
-            if by_card[card].mean_payment == best_value
+            card for card in legal_cards if by_card[card].mean_payment == best_value
         )
         rollout_card = (
             heuristic_card
@@ -199,9 +197,7 @@ class ActionValueCollector:
         self.rollout_actions[index] = card_to_action_index(rollout_card)
         self.game_ids[index] = game_id
         self.legal_counts[index] = len(legal_cards)
-        self.contract_ids[index] = GAME_TYPE_ORDER.index(
-            observation.contract.game_type
-        )
+        self.contract_ids[index] = GAME_TYPE_ORDER.index(observation.contract.game_type)
         self.role_ids[index] = int(infer_card_play_role(observation))
 
         for card in legal_cards:
@@ -322,7 +318,9 @@ def _validate_action_value_arrays(arrays: ActionValueArrays) -> None:
         raise ValueError("Action-value dataset cannot be empty.")
 
     if arrays.features.shape != (count, OBSERVATION_V2_FEATURE_SIZE):
-        raise ValueError(f"Unexpected action-value feature shape: {arrays.features.shape}.")
+        raise ValueError(
+            f"Unexpected action-value feature shape: {arrays.features.shape}."
+        )
     if arrays.legal_masks.shape != (count, ACTION_COUNT):
         raise ValueError(f"Unexpected legal-mask shape: {arrays.legal_masks.shape}.")
     if arrays.q_values.shape != (count, ACTION_COUNT):
