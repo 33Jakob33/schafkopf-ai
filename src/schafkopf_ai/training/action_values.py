@@ -46,7 +46,7 @@ class ActionValueArrays:
 
 
 class ActionValueDataset(
-    Dataset[tuple[Tensor, Tensor, Tensor, Tensor, Tensor]]
+    Dataset[tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]]
 ):
     """PyTorch view over Q-value supervision."""
 
@@ -59,7 +59,7 @@ class ActionValueDataset(
     def __getitem__(
         self,
         index: int,
-    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor, Tensor, Tensor]:
         return (
             torch.from_numpy(self.arrays.features[index]).to(torch.float32),
             torch.from_numpy(self.arrays.legal_masks[index]).to(torch.bool),
@@ -67,6 +67,10 @@ class ActionValueDataset(
             torch.from_numpy(self.arrays.q_stds[index]).to(torch.float32),
             torch.from_numpy(self.arrays.q_counts[index].astype(np.int64)).to(
                 torch.long
+            ),
+            torch.tensor(
+                int(self.arrays.rollout_actions[index]),
+                dtype=torch.long,
             ),
         )
 
