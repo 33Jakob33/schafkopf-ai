@@ -2,274 +2,186 @@
 
 [![CI](https://github.com/33Jakob33/schafkopf-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/33Jakob33/schafkopf-ai/actions/workflows/ci.yml)
 
-A hobby project for implementing Bavarian Schafkopf in Python and experimenting with different kinds of game-playing agents.
+A Python hobby/research project for playing Bavarian Schafkopf and experimenting with game-playing AI. It combines a deterministic, rule-based game engine with heuristic search, imitation learning and reinforcement learning. Learning experiments currently focus on **card play**; bidding is generally delegated to configurable heuristics.
 
-The repository contains a rules-based game engine, several baseline agents, and an experimental learning pipeline using PyTorch. The current learning work focuses on card play, while bidding is still handled by heuristic agents.
+> **Status:** Experimental. Models and data sets are generated locally and are not included in Git. A training script or agent implementation does not imply that the model has been trained or outperforms the heuristic baseline.
 
-## Features
+## Game engine
 
-The game engine currently supports:
+- Complete 32-card deck and four-player rounds with eight tricks and 120 Augen.
+- Sauspiel, Solo, Wenz, Geier and Ramsch.
+- Bidding and contract selection, including the all-pass Ramsch/redeal alternatives.
+- Contract-specific trump ordering, legal-move enforcement, Sauspiel called-Ace obligations and Davonlaufen.
+- Results, Schneider/Schwarz, Laufende, settlement and zero-sum payments.
+- Reproducible simulations with seeded deals and opponent behavior.
+- Player observations designed to respect hidden information.
 
-- the 32-card Bavarian Schafkopf deck,
-- Sauspiel,
-- Solo,
-- Wenz,
-- Geier,
-- Ramsch,
-- sequential bidding,
-- contract-dependent trump rules,
-- legal move enforcement,
-- Sauspiel called-Ace rules and Davonlaufen,
-- scoring with 120 Augen,
-- Schneider and Schwarz,
-- Laufende,
-- Ramsch settlement,
-- seeded simulation for reproducible games.
+## Agents and experiments
 
-The agent side currently includes:
+| Agent / approach | Implementation | Purpose |
+| --- | --- | --- |
+| Random | `RandomAgent` | Baseline; random bidding/card play |
+| Heuristic | `HeuristicAgent` | Contract-aware rule-based card play and bidding |
+| Strategic heuristic | `StrategicHeuristicAgent` | Experimental role-dependent tactical decisions |
+| Heuristic-bid/random-card | `HeuristicBiddingRandomCardAgent` | Isolate card-play performance while keeping bidding meaningful |
+| Behavioral cloning (BC) | `NeuralCardPlayAgent` | Imitate heuristic demonstrations with a learned policy |
+| DAgger | `NeuralCardPlayAgent` with DAgger checkpoint | Retrain on states visited by the learned policy |
+| PPO | `PPOCardPlayAgent` | Actor-critic reinforcement learning |
+| Specialist BC | `SpecialistCardPlayAgent` | Separate card-play models for role-specific decisions |
+| Multi-head BC | `MultiHeadCardPlayAgent` | Shared representation with role-specific action heads |
+| Action-value / Q | `QCardPlayAgent` | Predict rollout-derived values for legal card actions |
+| Rollout search | `RolloutCardPlayAgent` | Sample hidden hands, simulate candidate plays and select an action |
 
-- `RandomAgent`,
-- `HeuristicAgent`,
-- an experimental `StrategicHeuristicAgent`,
-- a behavior-cloned neural card-play agent,
-- a DAgger-trained neural card-play agent,
-- and a PPO actor-critic card-play agent.
+These methods are experimental, not a performance ranking. Learned agents load checkpoints from disk. Rollout search samples plausible hidden states and depends on its continuation-policy assumptions and computation budget.
 
-## Project structure
+## Repository layout
 
 ```text
-schafkopf-ai/
-├── .github/
-│   └── workflows/
-│       └── ci.yml
-├── scripts/
-│   ├── simulate_rounds.py
-│   ├── evaluate_heuristic.py
-│   ├── evaluate_heuristic_ab.py
-│   ├── generate_bc_dataset.py
-│   ├── train_behavior_clone.py
-│   ├── generate_dagger_dataset.py
-│   ├── evaluate_bc_agent.py
-│   ├── train_ppo.py
-│   └── evaluate_ppo_agent.py
-├── src/
-│   └── schafkopf_ai/
-│       ├── agents/
-│       ├── game/
-│       ├── runner/
-│       └── training/
-├── tests/
-├── README.md
-├── pyproject.toml
-└── uv.lock
+.github/workflows/ci.yml
+scripts/                       Simulation, data generation, training, evaluation
+src/schafkopf_ai/
+    agents/                     Baselines, neural policies, Q, specialists, rollout
+    game/                       Rules, contracts, cards, tricks, bidding, scoring
+    runner/                     Bidding, games and full-round execution
+    evaluation/                 Shared paired-agent evaluation
+    search/                     Hidden-state sampling and rollout continuations
+    training/                   Observation encoders and learning algorithms
+tests/                         Rule, agent, training and evaluation tests
+pyproject.toml
+uv.lock
 ```
 
-### `game/`
+## Installation
 
-Contains the core Schafkopf model and rules:
-
-- cards and deck,
-- game contracts,
-- bidding,
-- trump handling,
-- tricks,
-- legal moves,
-- player observations,
-- scoring,
-- game results,
-- settlement.
-
-### `runner/`
-
-Contains the logic that connects the game engine with agents and runs:
-
-- bidding,
-- card play,
-- complete rounds.
-
-### `agents/`
-
-Contains the common agent interface and the different player implementations.
-
-### `training/`
-
-Contains reusable ML components for:
-
-- card-play observation encoding,
-- behavior-cloning datasets,
-- demonstration collection,
-- DAgger,
-- PPO rollout storage,
-- actor-critic models,
-- checkpoint loading and saving,
-- PPO updates.
-
-## Setup
-
-The project uses Python 3.12 and [uv](https://docs.astral.sh/uv/) for dependency management.
+Requires **Python 3.12+** and [uv](https://docs.astral.sh/uv/).
 
 ```powershell
 git clone https://github.com/33Jakob33/schafkopf-ai.git
 cd schafkopf-ai
 uv sync
-```
-
-You can run the package entry point with:
-
-```powershell
 uv run schafkopf-ai
 ```
 
-## Running simulations
+The project uses PyTorch and NumPy. Depending on the machine, model training and inference may run on CPU or an available supported accelerator.
 
-Run a basic simulation:
+## Simulations and heuristic baselines
 
 ```powershell
 uv run python scripts/simulate_rounds.py
-```
-
-Evaluate the heuristic agent against random opponents:
-
-```powershell
 uv run python scripts/evaluate_heuristic.py --games 10000
-```
-
-There is also an A/B evaluation script for comparing heuristic variants:
-
-```powershell
 uv run python scripts/evaluate_heuristic_ab.py --games 10000
 ```
 
-## Neural card-play experiments
+The heuristic A/B evaluator compares heuristic variants using paired games.
 
-The neural agents currently use a fixed-size encoding of the player's observable game state and output one score for each of the 32 physical cards.
+## Evaluate agents against one another
 
-Illegal actions are masked before a card is selected.
+The **shared paired evaluator already present on `main`** compares reference and candidate agents on seeded initial deals with rotating focal seats. It reports win rates, payment differences, approximate 95% confidence intervals and breakdowns by game contract and role.
 
-The current training path is:
-
-```text
-Heuristic demonstrations
-        ↓
-Behavioral cloning
-        ↓
-DAgger
-        ↓
-PPO
+```powershell
+uv run python scripts/evaluate_agents.py --reference-kind heuristic --candidate-kind rollout --games 1000 --seed 123 --opponent-mode heuristic-bid-random-card
 ```
 
-Bidding remains heuristic-controlled during these experiments so that card play can be evaluated separately.
+Compare a trained PPO checkpoint:
 
-### Behavioral cloning
+```powershell
+uv run python scripts/evaluate_agents.py --reference-kind heuristic --candidate-kind ppo --candidate-checkpoint models/ppo/card_play_ppo_best.pt --games 10000 --seed 123
+```
+
+Supported kinds: `heuristic`, `bc`, `dagger`, `neural`, `multihead`, `specialist`, `ppo`, `q` and `rollout`. Use `--reference-checkpoint` or `--candidate-checkpoint` as required for learned agents. Specialist evaluation expects a specialist manifest.
+
+Opponent modes:
+
+- `heuristic-bid-random-card` (default): heuristic bidding, random card play.
+- `heuristic`: heuristic opponents for both bidding and card play.
+- `random`: random opponents, including bidding.
+
+`--bidding-profile` chooses the bidding-threshold preset; rollout comparisons can additionally configure rollout samples, continuation profile, epsilon and sampling seeds. See `uv run python scripts/evaluate_agents.py --help`.
+
+**Interpretation:** Paired games share initial deals, not necessarily identical later game states. Results depend on opponent strength, contract distributions, role mix and rollout budget. Hold back independent test seeds instead of optimizing repeatedly on the final evaluation sample.
+
+> The separate, frozen-manifest multi-agent benchmark currently being developed on `feature/unified-agent-benchmark` is **not part of `main`**. This README only documents features already on `main`.
+
+## Imitation learning: BC and DAgger
 
 Generate heuristic demonstrations:
 
 ```powershell
-uv run python scripts/generate_bc_dataset.py --games 2000
+uv run python scripts/generate_bc_dataset.py --games 2000 --observation-version v2 --output data/behavior_cloning/heuristic_card_play_v2.npz
 ```
 
-Train the card-play network:
+Train a neural card-play policy:
 
 ```powershell
-uv run python scripts/train_behavior_clone.py --epochs 10
+uv run python scripts/train_behavior_clone.py --dataset data/behavior_cloning/heuristic_card_play_v2.npz --output models/behavior_cloning/card_play_mlp.pt --epochs 10
 ```
 
-Evaluate the resulting checkpoint:
+Then evaluate it:
 
 ```powershell
-uv run python scripts/evaluate_bc_agent.py --games 10000
+uv run python scripts/evaluate_agents.py --reference-kind heuristic --candidate-kind bc --candidate-checkpoint models/behavior_cloning/card_play_mlp.pt --games 10000
 ```
 
-### DAgger
-
-Generate learner-visited states and heuristic labels:
+For **DAgger**, collect states reached by the learner and add heuristic action labels, then continue BC training on the aggregated dataset:
 
 ```powershell
 uv run python scripts/generate_dagger_dataset.py --games 2000
+uv run python scripts/train_behavior_clone.py --dataset data/behavior_cloning/dagger_card_play.npz --init-checkpoint models/behavior_cloning/card_play_mlp.pt --output models/behavior_cloning/card_play_dagger.pt --epochs 5 --learning-rate 0.0003
 ```
 
-Train on the aggregated dataset:
+The data generator also supports other observation versions and configurable heuristic bidding/opponent setups; inspect `--help` before larger runs. A BC/DAgger checkpoint must match the input encoding and model architecture it was trained with.
+
+### Role-aware imitation learning
+
+Two additional training approaches are available:
+
+- `scripts/train_specialists.py`: trains separate policies for defined card-play roles and writes a manifest consumed by `SpecialistCardPlayAgent`.
+- `scripts/train_multihead_behavior_clone.py`: trains a shared model with specialized action heads, consumed by `MultiHeadCardPlayAgent`.
+
+Example (using a previously generated compatible dataset):
 
 ```powershell
-uv run python scripts/train_behavior_clone.py `
-  --dataset data/behavior_cloning/dagger_card_play.npz `
-  --init-checkpoint models/behavior_cloning/card_play_mlp.pt `
-  --output models/behavior_cloning/card_play_dagger.pt `
-  --epochs 5 `
-  --learning-rate 0.0003
+uv run python scripts/train_specialists.py --dataset data/behavior_cloning/heuristic_card_play_v2.npz
+uv run python scripts/train_multihead_behavior_clone.py --dataset data/behavior_cloning/heuristic_card_play_v2.npz
 ```
 
-### PPO
+## Reinforcement learning: PPO
 
-PPO can be initialized from either a BC/DAgger checkpoint or an existing PPO checkpoint.
-
-For example:
+PPO uses an actor-critic card-play policy, legal-action masking, rollout collection, policy updates and periodic validation. It can initialize from a compatible BC/DAgger checkpoint, or resume from a compatible PPO checkpoint. Its training loop supports a mixture of heuristic, random and frozen policy-snapshot opponents.
 
 ```powershell
-uv run python scripts/train_ppo.py `
-  --init-checkpoint models/behavior_cloning/card_play_dagger.pt `
-  --iterations 30 `
-  --rollout-games 2000 `
-  --learning-rate 0.0001
+uv run python scripts/train_ppo.py --init-checkpoint models/behavior_cloning/card_play_dagger.pt --iterations 30 --rollout-games 2000 --learning-rate 0.0001
 ```
-
-The PPO trainer supports:
-
-- fixed validation games,
-- validation-based checkpoint selection,
-- heuristic and random opponents,
-- frozen PPO snapshot opponents,
-- configurable opponent mixtures.
-
-Evaluate a PPO checkpoint with:
 
 ```powershell
-uv run python scripts/evaluate_ppo_agent.py `
-  --checkpoint models/ppo/card_play_ppo_best.pt `
-  --games 10000
+uv run python scripts/evaluate_ppo_agent.py --checkpoint models/ppo/card_play_ppo_best.pt --games 10000
 ```
 
-Generated datasets and model checkpoints are not committed to the repository.
+## Action-value learning and rollout search
+
+The `search/` package provides **hidden-state sampling** and rollout continuations for imperfect-information decision making. `RolloutCardPlayAgent` evaluates legal moves using sampled possible hidden hands and simulated continuations.
+
+The Q-learning experiment takes a different route: generate rollout-based action-value targets, train a neural value predictor and then choose legal actions using the learned scores.
+
+```powershell
+uv run python scripts/generate_action_value_dataset.py --states 20000
+uv run python scripts/train_action_value.py --dataset data/action_values/action_values_v2_mixed_20k.npz
+uv run python scripts/evaluate_agents.py --reference-kind heuristic --candidate-kind q --candidate-checkpoint models/action_values/card_play_q_v2.pt --games 10000
+```
+
+These are experimental estimates rather than ground-truth optimal card values. Sampling and continuation-policy quality matter.
 
 ## Observation encoding
 
-Two card-play encodings are currently available.
+Card-play encodings are explicitly versioned so older experiments and checkpoints can coexist.
 
-**V1** is the original 1,254-feature representation. It contains the player's hand and a sparse slot-by-slot encoding of the complete public trick history.
+- **V1:** original 1,254-feature encoding with the hand and slot-by-slot public trick history.
+- **V2:** compact 222-feature encoding summarizing current trick, points, unseen trumps/suit cards, publicly inferred voids and contract/role context.
+- **V3:** newer observation format used by further model experiments, with version-aware checkpoint loading and a dedicated recurrent-policy path. See `training/observation_encoding.py`, `training/card_play_encoding_v3.py` and the V3 tests for exact feature definitions and compatibility requirements.
 
-**V2** is a compact 222-feature representation. Instead of keeping completed tricks as raw history, it summarizes the information that is relevant for later decisions:
+Policies select from a fixed set of 32 physical cards, with illegal actions masked. Encoders should use only the current player's hand and information observable or inferable from public play; never feed hidden opponent hands to the policy.
 
-- the player's full hand,
-- the current trick and current winning player,
-- points collected by each player,
-- team points when the teams are publicly known,
-- which trumps are still unseen,
-- unseen non-trump card counts and points by suit,
-- known void information for trump and each plain suit,
-- contract, declarer, called suit and trick progress.
-
-The compact encoder only uses the observer's private hand and information that is public or can be inferred from public play.
-
-Generate a V2 demonstration dataset with:
-
-```powershell
-uv run python scripts/generate_bc_dataset.py `
-  --games 2000 `
-  --observation-version v2 `
-  --output data/behavior_cloning/heuristic_card_play_v2.npz
-```
-
-Datasets and checkpoints keep their observation version, so V1 and V2 experiments can coexist.
-
-## Testing and code quality
-
-Run the test suite:
-
-```powershell
-uv run pytest
-```
-
-Run all local checks:
+## Tests and code quality
 
 ```powershell
 uv run pytest
@@ -278,8 +190,12 @@ uv run ruff format --check .
 uv run mypy src tests
 ```
 
-The same checks are also run through GitHub Actions.
+GitHub Actions runs the project checks. The suite covers core card/game invariants, bidding and scoring, learned-policy components, hidden-state sampling, rollout search, action-value learning and paired evaluation.
 
-## Notes
+## Reproducibility and limitations
 
-This is an ongoing hobby project. Parts of the ML pipeline and some strategy implementations are experimental and will likely change as the project develops.
+- Use explicit random seeds and keep training/validation/test games separate.
+- Compare multiple opponent modes and enough games for meaningful uncertainty estimates; a favorable win rate against random opponents is not proof of strong play.
+- Keep model, encoding, bidding profile and rollout configurations alongside evaluation results.
+- Generated datasets and model checkpoints are ignored by Git and must be produced locally.
+- This is an evolving hobby project, not a production-ready or verified optimal Schafkopf AI.
