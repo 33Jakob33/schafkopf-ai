@@ -20,7 +20,7 @@ def test_manifest_is_reproducible(tmp_path: Path) -> None:
 
 
 def test_case_replay_is_deterministic() -> None:
-    from scripts.benchmark_agents import play_case
+    from schafkopf_ai.evaluation.benchmark_runner import play_case
 
     case = generate_cases(count=1, seed=7)[0]
     first = play_case(case, HeuristicAgent(), "digest", "heuristic")
