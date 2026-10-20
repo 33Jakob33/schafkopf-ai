@@ -26,6 +26,8 @@ class RolloutCardPlayAgent(Agent):
         max_sampling_attempts: int = 5_000,
         continuation_profile: str = "heuristic",
         epsilon: float = 0.10,
+        evidence_candidates: int = 1,
+        evidence_agreement: float = 0.7,
         bidding_agent: Agent | None = None,
     ) -> None:
         self.evaluator = MonteCarloActionEvaluator(
@@ -34,6 +36,8 @@ class RolloutCardPlayAgent(Agent):
             max_sampling_attempts=max_sampling_attempts,
             continuation_profile=continuation_profile,
             epsilon=epsilon,
+            evidence_candidates=evidence_candidates,
+            evidence_agreement=evidence_agreement,
         )
         self.bidding_agent = (
             HeuristicAgent() if bidding_agent is None else bidding_agent
