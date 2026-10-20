@@ -17,6 +17,7 @@ from schafkopf_ai.training.ppo import (
     ActorCriticCardPlayNetwork,
     PPORolloutBuffer,
     PPOStep,
+    compute_gae,
     initialize_from_behavior_checkpoint,
     initialize_from_checkpoint,
     ppo_update,
@@ -175,3 +176,62 @@ def test_ppo_update_runs_on_small_rollout() -> None:
     assert metrics.samples == 2
     assert torch.isfinite(torch.tensor(metrics.policy_loss))
     assert torch.isfinite(torch.tensor(metrics.value_loss))
+
+
+def test_compute_gae_with_zero_value_estimates() -> None:
+    advantages, returns = compute_gae(
+        values=[0.0, 0.0, 0.0],
+        terminal_return=1.0,
+        gamma=1.0,
+        gae_lambda=0.5,
+    )
+
+    assert advantages == [0.25, 0.5, 1.0]
+    assert returns == [0.25, 0.5, 1.0]
+
+
+def test_compute_gae_bootstraps_between_focal_decisions() -> None:
+    advantages, returns = compute_gae(
+        values=[0.2, 0.4, 0.1],
+        terminal_return=1.0,
+        gamma=1.0,
+        gae_lambda=0.5,
+    )
+
+    expected_advantages = torch.tensor([0.275, 0.15, 0.9])
+    expected_returns = torch.tensor([0.475, 0.55, 1.0])
+
+    assert torch.allclose(torch.tensor(advantages), expected_advantages)
+    assert torch.allclose(torch.tensor(returns), expected_returns)
+
+
+def test_rollout_buffer_stores_gae_targets() -> None:
+    rollout = PPORolloutBuffer()
+    legal_mask = torch.tensor([True, True])
+
+    rollout.add_episode(
+        [
+            PPOStep(
+                features=torch.zeros(4),
+                legal_mask=legal_mask,
+                action=0,
+                log_probability=0.0,
+                value=0.0,
+            ),
+            PPOStep(
+                features=torch.ones(4),
+                legal_mask=legal_mask,
+                action=1,
+                log_probability=0.0,
+                value=0.0,
+            ),
+        ],
+        terminal_return=1.0,
+        gamma=1.0,
+        gae_lambda=0.5,
+    )
+
+    batch = rollout.as_batch(torch.device("cpu"))
+
+    assert torch.allclose(batch.advantages, torch.tensor([0.5, 1.0]))
+    assert torch.allclose(batch.returns, torch.tensor([0.5, 1.0]))

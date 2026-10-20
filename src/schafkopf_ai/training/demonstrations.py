@@ -2,28 +2,40 @@ from __future__ import annotations
 
 import numpy as np
 
-from schafkopf_ai.agents.heuristic_agent import HeuristicAgent
+from schafkopf_ai.agents.heuristic_agent import HeuristicAgent, HeuristicConfig
 from schafkopf_ai.game.card import Card
 from schafkopf_ai.game.observation import PlayerObservation
 
 from .behavior_cloning import BehaviorCloningArrays
-from .card_play_encoding import (
-    ACTION_COUNT,
-    OBSERVATION_FEATURE_SIZE,
-    card_to_action_index,
-    encode_card_play,
+from .card_play_encoding import ACTION_COUNT, GAME_TYPE_ORDER, card_to_action_index
+from .card_play_roles import infer_card_play_role
+from .observation_encoding import (
+    ObservationVersion,
+    encode_card_play_for_version,
+    feature_size_for_version,
+    normalize_observation_version,
 )
 
 
 class BehaviorCloningCollector:
     """Preallocated collector for card-play demonstrations."""
 
-    def __init__(self, expected_examples: int) -> None:
+    def __init__(
+        self,
+        expected_examples: int,
+        *,
+        observation_version: str = "v1",
+    ) -> None:
         if expected_examples <= 0:
             raise ValueError("expected_examples must be greater than zero.")
 
+        self.observation_version: ObservationVersion = normalize_observation_version(
+            observation_version
+        )
+        feature_size = feature_size_for_version(self.observation_version)
+
         self.features = np.empty(
-            (expected_examples, OBSERVATION_FEATURE_SIZE),
+            (expected_examples, feature_size),
             dtype=np.float16,
         )
         self.legal_masks = np.empty(
@@ -33,6 +45,8 @@ class BehaviorCloningCollector:
         self.targets = np.empty(expected_examples, dtype=np.uint8)
         self.game_ids = np.empty(expected_examples, dtype=np.uint32)
         self.legal_counts = np.empty(expected_examples, dtype=np.uint8)
+        self.contract_ids = np.empty(expected_examples, dtype=np.uint8)
+        self.role_ids = np.empty(expected_examples, dtype=np.uint8)
 
         self._expected_examples = expected_examples
         self._count = 0
@@ -59,7 +73,11 @@ class BehaviorCloningCollector:
         if chosen_card not in legal_cards:
             raise ValueError("Demonstration target must be one of the legal cards.")
 
-        encoded = encode_card_play(observation, legal_cards)
+        encoded = encode_card_play_for_version(
+            self.observation_version,
+            observation,
+            legal_cards,
+        )
         target = card_to_action_index(chosen_card)
 
         index = self._count
@@ -71,6 +89,8 @@ class BehaviorCloningCollector:
         self.targets[index] = target
         self.game_ids[index] = game_id
         self.legal_counts[index] = len(legal_cards)
+        self.contract_ids[index] = GAME_TYPE_ORDER.index(observation.contract.game_type)
+        self.role_ids[index] = int(infer_card_play_role(observation))
         self._count += 1
 
     def arrays(self) -> BehaviorCloningArrays:
@@ -84,6 +104,8 @@ class BehaviorCloningCollector:
             targets=self.targets[: self._count],
             game_ids=self.game_ids[: self._count],
             legal_counts=self.legal_counts[: self._count],
+            contract_ids=self.contract_ids[: self._count],
+            role_ids=self.role_ids[: self._count],
         )
 
 
@@ -95,8 +117,9 @@ class RecordingHeuristicAgent(HeuristicAgent):
         *,
         collector: BehaviorCloningCollector,
         game_id: int,
+        config: HeuristicConfig | None = None,
     ) -> None:
-        super().__init__()
+        super().__init__(config=config)
         self.collector = collector
         self.game_id = game_id
 

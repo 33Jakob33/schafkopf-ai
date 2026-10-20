@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import numpy as np
+import pytest
 import torch
 
 from schafkopf_ai.agents.neural_card_play_agent import NeuralCardPlayAgent
@@ -11,6 +12,11 @@ from schafkopf_ai.game.observation import PlayerObservation
 from schafkopf_ai.training.behavior_cloning import (
     BehaviorCloningArrays,
     CardPlayPolicyNetwork,
+    DeepCardPlayPolicyNetwork,
+    GRUCardPlayPolicyNetwork,
+    contract_balance_weights,
+    filter_indices_by_role,
+    filter_training_indices,
     load_behavior_cloning_arrays,
     mask_illegal_logits,
     save_behavior_cloning_arrays,
@@ -20,6 +26,10 @@ from schafkopf_ai.training.card_play_encoding import (
     ACTION_COUNT,
     OBSERVATION_FEATURE_SIZE,
     card_to_action_index,
+)
+from schafkopf_ai.training.card_play_encoding_v3 import (
+    HISTORY_STEP_FEATURE_SIZE,
+    OBSERVATION_V3_FEATURE_SIZE,
 )
 from schafkopf_ai.training.demonstrations import BehaviorCloningCollector
 
@@ -44,6 +54,44 @@ def test_card_play_policy_network_has_32_logits() -> None:
     logits = model(features)
 
     assert logits.shape == (3, ACTION_COUNT)
+
+
+def test_deep_card_play_policy_network_supports_three_hidden_layers() -> None:
+    model = DeepCardPlayPolicyNetwork(
+        input_size=222,
+        hidden_sizes=(128, 96, 64),
+    )
+    features = torch.zeros((3, 222), dtype=torch.float32)
+
+    logits = model(features)
+
+    assert logits.shape == (3, ACTION_COUNT)
+    assert model.architecture == "mlp_deep_v1"
+    assert model.hidden_sizes == (128, 96, 64)
+
+
+def test_neural_agent_loads_deep_mlp_checkpoint(tmp_path: Path) -> None:
+    model = DeepCardPlayPolicyNetwork(
+        input_size=222,
+        hidden_sizes=(128, 96, 64),
+    )
+    checkpoint = tmp_path / "deep.pt"
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "architecture": model.architecture,
+            "input_size": model.input_size,
+            "hidden_sizes": model.hidden_sizes,
+            "action_count": model.action_count,
+            "observation_version": model.observation_version,
+        },
+        checkpoint,
+    )
+
+    agent = NeuralCardPlayAgent.from_checkpoint(checkpoint)
+
+    assert isinstance(agent.model, DeepCardPlayPolicyNetwork)
+    assert agent.model.hidden_sizes == (128, 96, 64)
 
 
 def test_mask_illegal_logits_prevents_illegal_argmax() -> None:
@@ -75,6 +123,10 @@ def test_collector_records_heuristic_target_as_legal_action() -> None:
     assert arrays.example_count == 1
     assert arrays.game_ids.tolist() == [12]
     assert arrays.legal_counts.tolist() == [2]
+    assert arrays.contract_ids is not None
+    assert arrays.contract_ids.tolist() == [2]
+    assert arrays.role_ids is not None
+    assert arrays.role_ids.tolist() == [5]
     assert int(arrays.targets[0]) == card_to_action_index(second)
     assert arrays.legal_masks[0, card_to_action_index(second)]
 
@@ -100,6 +152,78 @@ def test_behavior_cloning_dataset_round_trip(tmp_path: Path) -> None:
     assert np.array_equal(loaded.legal_masks, arrays.legal_masks)
     assert np.array_equal(loaded.targets, arrays.targets)
     assert np.array_equal(loaded.game_ids, arrays.game_ids)
+    assert loaded.contract_ids is None
+    assert loaded.role_ids is None
+
+
+def test_behavior_cloning_dataset_round_trip_preserves_contract_ids(
+    tmp_path: Path,
+) -> None:
+    features = np.zeros((4, OBSERVATION_FEATURE_SIZE), dtype=np.float16)
+    legal_masks = np.zeros((4, ACTION_COUNT), dtype=np.bool_)
+    legal_masks[:, 0] = True
+    arrays = BehaviorCloningArrays(
+        features=features,
+        legal_masks=legal_masks,
+        targets=np.zeros(4, dtype=np.uint8),
+        game_ids=np.arange(4, dtype=np.uint32),
+        legal_counts=np.ones(4, dtype=np.uint8),
+        contract_ids=np.asarray([0, 1, 2, 4], dtype=np.uint8),
+        role_ids=np.asarray([0, 3, 5, 7], dtype=np.uint8),
+    )
+    path = tmp_path / "bc_contracts.npz"
+
+    save_behavior_cloning_arrays(path, arrays)
+    loaded = load_behavior_cloning_arrays(path)
+
+    assert loaded.contract_ids is not None
+    assert arrays.contract_ids is not None
+    assert np.array_equal(loaded.contract_ids, arrays.contract_ids)
+    assert loaded.role_ids is not None
+    assert arrays.role_ids is not None
+    assert np.array_equal(loaded.role_ids, arrays.role_ids)
+
+
+def test_filter_indices_by_role_selects_only_requested_role() -> None:
+    indices = [0, 1, 2, 3, 4]
+    role_ids = np.asarray([0, 3, 3, 7, 0], dtype=np.uint8)
+
+    filtered = filter_indices_by_role(indices, role_ids, role_id=3)
+
+    assert filtered == [1, 2]
+
+
+def test_filter_training_indices_can_drop_forced_moves() -> None:
+    indices = [0, 1, 2, 3]
+    legal_counts = np.asarray([1, 2, 1, 5], dtype=np.uint8)
+
+    filtered = filter_training_indices(
+        indices,
+        legal_counts,
+        nontrivial_only=True,
+    )
+
+    assert filtered == [1, 3]
+    assert (
+        filter_training_indices(
+            indices,
+            legal_counts,
+            nontrivial_only=False,
+        )
+        == indices
+    )
+
+
+def test_contract_balance_weights_equalize_contract_mass_at_alpha_one() -> None:
+    contract_ids = np.asarray([0, 0, 0, 1], dtype=np.uint8)
+    indices = [0, 1, 2, 3]
+
+    weights = contract_balance_weights(contract_ids, indices, alpha=1.0)
+
+    first_contract_mass = float(weights[:3].sum())
+    second_contract_mass = float(weights[3])
+
+    assert first_contract_mass == pytest.approx(second_contract_mass)
 
 
 def test_split_indices_keeps_games_together() -> None:
@@ -133,3 +257,47 @@ def test_neural_agent_masks_illegal_cards() -> None:
     chosen = agent.choose_card(observation, (first, second))
 
     assert chosen == first
+
+
+def test_gru_card_play_policy_network_has_32_logits() -> None:
+    model = GRUCardPlayPolicyNetwork(
+        hidden_sizes=(32, 24),
+        gru_hidden_size=16,
+    )
+    features = torch.zeros((3, OBSERVATION_V3_FEATURE_SIZE), dtype=torch.float32)
+
+    # Add one real public-history step to one batch item so both empty and
+    # non-empty sequence paths are exercised.
+    history_offset = OBSERVATION_V3_FEATURE_SIZE - 31 * HISTORY_STEP_FEATURE_SIZE
+    features[1, history_offset] = 1.0
+
+    logits = model(features)
+
+    assert logits.shape == (3, ACTION_COUNT)
+    assert model.observation_version == "v3"
+    assert model.architecture == "gru_v1"
+
+
+def test_neural_agent_loads_gru_checkpoint(tmp_path: Path) -> None:
+    model = GRUCardPlayPolicyNetwork(
+        hidden_sizes=(32, 24),
+        gru_hidden_size=16,
+    )
+    checkpoint = tmp_path / "gru.pt"
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "architecture": model.architecture,
+            "input_size": model.input_size,
+            "hidden_sizes": model.hidden_sizes,
+            "gru_hidden_size": model.gru_hidden_size,
+            "action_count": model.action_count,
+            "observation_version": model.observation_version,
+        },
+        checkpoint,
+    )
+
+    agent = NeuralCardPlayAgent.from_checkpoint(checkpoint)
+
+    assert agent.observation_version == "v3"
+    assert isinstance(agent.model, GRUCardPlayPolicyNetwork)

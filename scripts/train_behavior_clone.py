@@ -12,18 +12,29 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 from torch.optim import AdamW
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader, Subset, WeightedRandomSampler
 
 from schafkopf_ai.training.behavior_cloning import (
     BehaviorCloningDataset,
-    CardPlayPolicyNetwork,
+    CardPlayPolicyModel,
+    architecture_for_observation_version,
+    contract_balance_weights,
+    create_card_play_policy,
+    filter_indices_by_role,
+    filter_training_indices,
     load_behavior_cloning_arrays,
     mask_illegal_logits,
     split_indices_by_game,
 )
-from schafkopf_ai.training.card_play_encoding import (
-    ACTION_COUNT,
-    OBSERVATION_FEATURE_SIZE,
+from schafkopf_ai.training.card_play_encoding import ACTION_COUNT
+from schafkopf_ai.training.card_play_roles import (
+    ROLE_KEYS,
+    CardPlayRole,
+    normalize_card_play_role,
+)
+from schafkopf_ai.training.observation_encoding import (
+    infer_observation_version,
+    resolve_checkpoint_observation_version,
 )
 
 
@@ -48,7 +59,7 @@ def resolve_device(requested: str) -> torch.device:
 
 def run_epoch(
     *,
-    model: CardPlayPolicyNetwork,
+    model: CardPlayPolicyModel,
     loader: DataLoader[tuple[Tensor, Tensor, Tensor]],
     device: torch.device,
     optimizer: AdamW | None,
@@ -107,21 +118,27 @@ def run_epoch(
 def save_checkpoint(
     *,
     path: Path,
-    model: CardPlayPolicyNetwork,
+    model: CardPlayPolicyModel,
     epoch: int,
     validation_metrics: EpochMetrics,
     dataset_path: Path,
     seed: int,
     initialized_from: Path | None,
+    nontrivial_only: bool,
+    contract_balance_alpha: float,
+    specialist_role: CardPlayRole | None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
     torch.save(
         {
             "model_state_dict": model.state_dict(),
+            "architecture": model.architecture,
             "input_size": model.input_size,
             "hidden_sizes": model.hidden_sizes,
+            "gru_hidden_size": getattr(model, "gru_hidden_size", None),
             "action_count": model.action_count,
+            "observation_version": model.observation_version,
             "epoch": epoch,
             "validation_loss": validation_metrics.loss,
             "validation_accuracy": validation_metrics.accuracy,
@@ -131,6 +148,11 @@ def save_checkpoint(
             "initialized_from": (
                 str(initialized_from) if initialized_from is not None else None
             ),
+            "training_nontrivial_only": nontrivial_only,
+            "contract_balance_alpha": contract_balance_alpha,
+            "specialist_role": (
+                specialist_role.key if specialist_role is not None else None
+            ),
         },
         path,
     )
@@ -138,7 +160,7 @@ def save_checkpoint(
 
 def load_initial_weights(
     *,
-    model: CardPlayPolicyNetwork,
+    model: CardPlayPolicyModel,
     checkpoint_path: Path,
     device: torch.device,
 ) -> None:
@@ -151,19 +173,42 @@ def load_initial_weights(
     if not isinstance(checkpoint, dict):
         raise TypeError("Initial checkpoint must be a dictionary.")
 
-    input_size = int(checkpoint.get("input_size", OBSERVATION_FEATURE_SIZE))
+    input_size = int(checkpoint.get("input_size", model.input_size))
     action_count = int(checkpoint.get("action_count", ACTION_COUNT))
     raw_hidden_sizes = checkpoint.get("hidden_sizes", model.hidden_sizes)
 
-    if not isinstance(raw_hidden_sizes, (tuple, list)) or len(raw_hidden_sizes) != 2:
-        raise ValueError("Initial checkpoint hidden_sizes must contain two values.")
+    if not isinstance(raw_hidden_sizes, (tuple, list)) or len(raw_hidden_sizes) < 2:
+        raise ValueError(
+            "Initial checkpoint hidden_sizes must contain at least two values."
+        )
 
-    hidden_sizes = (int(raw_hidden_sizes[0]), int(raw_hidden_sizes[1]))
+    hidden_sizes = tuple(int(value) for value in raw_hidden_sizes)
+
+    checkpoint_version = resolve_checkpoint_observation_version(
+        input_size=input_size,
+        explicit_version=checkpoint.get("observation_version"),
+    )
+    checkpoint_architecture = checkpoint.get(
+        "architecture",
+        architecture_for_observation_version(checkpoint_version),
+    )
+    if not isinstance(checkpoint_architecture, str):
+        raise TypeError("Initial checkpoint architecture must be a string.")
 
     if input_size != model.input_size:
         raise ValueError(
             "Initial checkpoint observation size does not match the model: "
             f"{input_size} != {model.input_size}."
+        )
+    if checkpoint_version != model.observation_version:
+        raise ValueError(
+            "Initial checkpoint observation version does not match the model: "
+            f"{checkpoint_version} != {model.observation_version}."
+        )
+    if checkpoint_architecture != model.architecture:
+        raise ValueError(
+            "Initial checkpoint architecture does not match the model: "
+            f"{checkpoint_architecture} != {model.architecture}."
         )
     if action_count != model.action_count:
         raise ValueError(
@@ -175,6 +220,16 @@ def load_initial_weights(
             "Initial checkpoint hidden sizes do not match the model: "
             f"{hidden_sizes} != {model.hidden_sizes}."
         )
+
+    if model.architecture == "gru_v1":
+        checkpoint_gru_hidden = int(
+            checkpoint.get("gru_hidden_size", model.gru_hidden_size)
+        )
+        if checkpoint_gru_hidden != model.gru_hidden_size:
+            raise ValueError(
+                "Initial checkpoint GRU hidden size does not match the model: "
+                f"{checkpoint_gru_hidden} != {model.gru_hidden_size}."
+            )
 
     state_dict = checkpoint.get("model_state_dict")
     if not isinstance(state_dict, dict):
@@ -194,7 +249,12 @@ def train(
     validation_fraction: float,
     seed: int,
     device_name: str,
-    hidden_sizes: tuple[int, int],
+    hidden_sizes: tuple[int, ...],
+    architecture: str | None,
+    gru_hidden_size: int,
+    nontrivial_only: bool,
+    contract_balance_alpha: float,
+    specialist_role: CardPlayRole | None,
     init_checkpoint: Path | None = None,
 ) -> None:
     if epochs <= 0:
@@ -203,6 +263,8 @@ def train(
         raise ValueError("batch_size must be greater than zero.")
     if learning_rate <= 0.0:
         raise ValueError("learning_rate must be positive.")
+    if not 0.0 <= contract_balance_alpha <= 1.0:
+        raise ValueError("contract_balance_alpha must be between 0 and 1.")
 
     random.seed(seed)
     np.random.seed(seed)
@@ -211,11 +273,43 @@ def train(
     device = resolve_device(device_name)
     arrays = load_behavior_cloning_arrays(dataset_path)
     dataset = BehaviorCloningDataset(arrays)
-    train_indices, validation_indices = split_indices_by_game(
+    split_train_indices, split_validation_indices = split_indices_by_game(
         arrays.game_ids,
         validation_fraction=validation_fraction,
         seed=seed,
     )
+
+    if specialist_role is not None:
+        if arrays.role_ids is None:
+            raise ValueError(
+                "Specialist training requires role_ids. Regenerate the dataset "
+                "with the current demonstration collector."
+            )
+        split_train_indices = filter_indices_by_role(
+            split_train_indices,
+            arrays.role_ids,
+            role_id=int(specialist_role),
+        )
+        split_validation_indices = filter_indices_by_role(
+            split_validation_indices,
+            arrays.role_ids,
+            role_id=int(specialist_role),
+        )
+
+    train_indices = filter_training_indices(
+        split_train_indices,
+        arrays.legal_counts,
+        nontrivial_only=nontrivial_only,
+    )
+    validation_indices = filter_training_indices(
+        split_validation_indices,
+        arrays.legal_counts,
+        nontrivial_only=nontrivial_only,
+    )
+    if not train_indices:
+        raise ValueError("Training selection contains no examples.")
+    if not validation_indices:
+        raise ValueError("Validation selection contains no examples.")
 
     train_dataset = Subset(dataset, train_indices)
     validation_dataset = Subset(dataset, validation_indices)
@@ -223,22 +317,49 @@ def train(
     generator = torch.Generator()
     generator.manual_seed(seed)
 
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        generator=generator,
-    )
+    if contract_balance_alpha > 0.0:
+        if arrays.contract_ids is None:
+            raise ValueError(
+                "Contract-balanced sampling requires a dataset with contract_ids. "
+                "Regenerate the dataset with the current generator."
+            )
+        sample_weights = contract_balance_weights(
+            arrays.contract_ids,
+            train_indices,
+            alpha=contract_balance_alpha,
+        )
+        sampler = WeightedRandomSampler(
+            weights=torch.from_numpy(sample_weights),
+            num_samples=len(train_indices),
+            replacement=True,
+            generator=generator,
+        )
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            sampler=sampler,
+        )
+    else:
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            generator=generator,
+        )
     validation_loader = DataLoader(
         validation_dataset,
         batch_size=batch_size,
         shuffle=False,
     )
 
-    model = CardPlayPolicyNetwork(
-        input_size=OBSERVATION_FEATURE_SIZE,
+    input_size = int(arrays.features.shape[1])
+    observation_version = infer_observation_version(input_size)
+    model = create_card_play_policy(
+        input_size=input_size,
         hidden_sizes=hidden_sizes,
+        gru_hidden_size=gru_hidden_size,
         action_count=ACTION_COUNT,
+        architecture=architecture,
     ).to(device)
 
     if init_checkpoint is not None:
@@ -261,12 +382,24 @@ def train(
     print("=" * 88)
     print(f"Dataset:                   {dataset_path}")
     print(f"Examples:                  {arrays.example_count:,}")
-    print(f"Training examples:         {len(train_indices):,}")
+    print(f"Training examples (split): {len(split_train_indices):,}")
+    print(f"Training examples (used):  {len(train_indices):,}")
     print(f"Validation examples:       {len(validation_indices):,}")
+    print(
+        "Specialist role:           "
+        f"{specialist_role.key if specialist_role is not None else 'all'}"
+    )
     print(f"Device:                    {device}")
+    print(f"Observation version:       {observation_version}")
+    print(f"Observation features:      {input_size}")
+    print(f"Architecture:              {model.architecture}")
     print(f"Hidden sizes:              {hidden_sizes}")
+    if model.architecture == "gru_v1":
+        print(f"GRU hidden size:           {model.gru_hidden_size}")
     print(f"Batch size:                {batch_size}")
     print(f"Learning rate:             {learning_rate:g}")
+    print(f"Non-trivial only:          {nontrivial_only}")
+    print(f"Contract balance alpha:    {contract_balance_alpha:g}")
     print(
         "Initialized from:           "
         f"{init_checkpoint if init_checkpoint is not None else 'random weights'}"
@@ -309,6 +442,9 @@ def train(
                 dataset_path=dataset_path,
                 seed=seed,
                 initialized_from=init_checkpoint,
+                nontrivial_only=nontrivial_only,
+                contract_balance_alpha=contract_balance_alpha,
+                specialist_role=specialist_role,
             )
             print(f"  saved new best checkpoint -> {output}")
 
@@ -321,7 +457,8 @@ def train(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Train an MLP on heuristic demonstrations or an aggregated DAgger dataset."
+            "Train a card-play policy on heuristic demonstrations or an "
+            "aggregated DAgger dataset. V3 datasets use the hybrid GRU policy."
         )
     )
     parser.add_argument(
@@ -353,11 +490,71 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--hidden-1", type=int, default=512)
     parser.add_argument("--hidden-2", type=int, default=256)
+    parser.add_argument(
+        "--hidden-3",
+        type=int,
+        default=None,
+        help=(
+            "Optional third hidden layer. Supplying it selects the deep MLP "
+            "unless --architecture is given explicitly."
+        ),
+    )
+    parser.add_argument(
+        "--architecture",
+        choices=("auto", "mlp_v1", "mlp_deep_v1", "gru_v1"),
+        default="auto",
+        help=(
+            "Policy architecture. auto preserves legacy behavior and selects "
+            "the deep MLP automatically when --hidden-3 is supplied."
+        ),
+    )
+    parser.add_argument(
+        "--gru-hidden-size",
+        type=int,
+        default=128,
+        help="Hidden size of the V3 public-history GRU (default: 128).",
+    )
+    parser.add_argument(
+        "--nontrivial-only",
+        action="store_true",
+        help=(
+            "Train only on decisions with more than one legal card. Forced moves "
+            "have zero masked cross-entropy signal and otherwise waste batches."
+        ),
+    )
+    parser.add_argument(
+        "--specialist-role",
+        choices=ROLE_KEYS,
+        default=None,
+        help=(
+            "Train one contract/role specialist. Requires role metadata in the "
+            "dataset. Validation is filtered to the same role."
+        ),
+    )
+    parser.add_argument(
+        "--contract-balance-alpha",
+        type=float,
+        default=0.0,
+        help=(
+            "Tempered contract rebalancing in [0,1]: 0 keeps the natural "
+            "distribution, 0.5 moderately upweights rare contracts, and 1 "
+            "gives observed contracts equal expected sampling mass."
+        ),
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    hidden_sizes = (
+        (args.hidden_1, args.hidden_2, args.hidden_3)
+        if args.hidden_3 is not None
+        else (args.hidden_1, args.hidden_2)
+    )
+    architecture = None if args.architecture == "auto" else args.architecture
+    if architecture is None and args.hidden_3 is not None:
+        architecture = "mlp_deep_v1"
+
     train(
         dataset_path=args.dataset,
         output=args.output,
@@ -368,7 +565,16 @@ def main() -> None:
         validation_fraction=args.validation_fraction,
         seed=args.seed,
         device_name=args.device,
-        hidden_sizes=(args.hidden_1, args.hidden_2),
+        hidden_sizes=hidden_sizes,
+        architecture=architecture,
+        gru_hidden_size=args.gru_hidden_size,
+        nontrivial_only=args.nontrivial_only,
+        contract_balance_alpha=args.contract_balance_alpha,
+        specialist_role=(
+            normalize_card_play_role(args.specialist_role)
+            if args.specialist_role is not None
+            else None
+        ),
         init_checkpoint=args.init_checkpoint,
     )
 

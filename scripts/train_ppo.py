@@ -5,7 +5,7 @@ import copy
 import random
 import statistics
 import time
-from collections import deque
+from collections import defaultdict, deque
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -16,19 +16,36 @@ from schafkopf_ai.agents.agent import Agent
 from schafkopf_ai.agents.heuristic_agent import HeuristicAgent
 from schafkopf_ai.agents.ppo_card_play_agent import PPOCardPlayAgent
 from schafkopf_ai.agents.random_agent import RandomAgent
+from schafkopf_ai.game.game_type import GameType
 from schafkopf_ai.game.rules import RAMSCH_RULES
 from schafkopf_ai.runner.round_runner import RoundResult, RoundRunner
-from schafkopf_ai.training.card_play_encoding import (
-    ACTION_COUNT,
-    OBSERVATION_FEATURE_SIZE,
-)
+from schafkopf_ai.training.card_play_encoding import ACTION_COUNT
 from schafkopf_ai.training.ppo import (
     ActorCriticCardPlayNetwork,
     PPORolloutBuffer,
+    checkpoint_observation_spec,
     initialize_from_checkpoint,
     ppo_update,
     save_ppo_checkpoint,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class ContractRolloutMetrics:
+    games: int
+    wins: int
+    payments: tuple[int, ...]
+
+    @property
+    def mean_payment(self) -> float:
+        return statistics.fmean(self.payments)
+
+    @property
+    def win_rate(self) -> float:
+        return self.wins / self.games
+
+    def mean_reward(self, reward_scale: float) -> float:
+        return self.mean_payment * reward_scale
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +57,7 @@ class RolloutMetrics:
     random_opponents: int
     heuristic_opponents: int
     self_play_opponents: int
+    by_contract: dict[GameType, ContractRolloutMetrics]
 
     @property
     def mean_payment(self) -> float:
@@ -51,6 +69,34 @@ class RolloutMetrics:
 
 
 @dataclass(frozen=True, slots=True)
+class ValidationContractMetrics:
+    policy_payments: tuple[int, ...]
+    heuristic_payments: tuple[int, ...]
+    deltas: tuple[int, ...]
+    policy_wins: int
+
+    @property
+    def games(self) -> int:
+        return len(self.deltas)
+
+    @property
+    def mean_policy_payment(self) -> float:
+        return statistics.fmean(self.policy_payments)
+
+    @property
+    def mean_heuristic_payment(self) -> float:
+        return statistics.fmean(self.heuristic_payments)
+
+    @property
+    def mean_delta(self) -> float:
+        return statistics.fmean(self.deltas)
+
+    @property
+    def policy_win_rate(self) -> float:
+        return self.policy_wins / self.games
+
+
+@dataclass(frozen=True, slots=True)
 class ValidationMetrics:
     games: int
     policy_payments: tuple[int, ...]
@@ -58,6 +104,7 @@ class ValidationMetrics:
     deltas: tuple[int, ...]
     policy_wins: int
     heuristic_wins: int
+    by_contract: dict[GameType, ValidationContractMetrics]
 
     @property
     def mean_policy_payment(self) -> float:
@@ -90,9 +137,13 @@ def _validate_round(result: RoundResult) -> None:
     if len(result.game_state.completed_tricks) != 8:
         raise RuntimeError("Validation round does not contain eight tricks.")
     if sum(result.player_points) != 120:
-        raise RuntimeError(f"Validation Augen do not sum to 120: {result.player_points}.")
+        raise RuntimeError(
+            f"Validation Augen do not sum to 120: {result.player_points}."
+        )
     if sum(result.payments) != 0:
-        raise RuntimeError(f"Validation payments do not sum to zero: {result.payments}.")
+        raise RuntimeError(
+            f"Validation payments do not sum to zero: {result.payments}."
+        )
 
 
 def _run_validation_variant(
@@ -153,6 +204,10 @@ def validate_policy(
     deltas: list[int] = []
     policy_wins = 0
     heuristic_wins = 0
+    contract_policy_payments: dict[GameType, list[int]] = defaultdict(list)
+    contract_heuristic_payments: dict[GameType, list[int]] = defaultdict(list)
+    contract_deltas: dict[GameType, list[int]] = defaultdict(list)
+    contract_policy_wins: dict[GameType, int] = defaultdict(int)
 
     for game_index in range(games):
         focal_seat = game_index % 4
@@ -177,13 +232,29 @@ def validate_policy(
         heuristic_payment = heuristic_result.payments[focal_seat]
         policy_payment = policy_result.payments[focal_seat]
 
+        delta = policy_payment - heuristic_payment
         heuristic_payments.append(heuristic_payment)
         policy_payments.append(policy_payment)
-        deltas.append(policy_payment - heuristic_payment)
-        heuristic_wins += int(
-            focal_seat in heuristic_result.game_result.winner_players
+        deltas.append(delta)
+        heuristic_wins += int(focal_seat in heuristic_result.game_result.winner_players)
+        policy_won = int(focal_seat in policy_result.game_result.winner_players)
+        policy_wins += policy_won
+
+        game_type = policy_result.contract.game_type
+        contract_heuristic_payments[game_type].append(heuristic_payment)
+        contract_policy_payments[game_type].append(policy_payment)
+        contract_deltas[game_type].append(delta)
+        contract_policy_wins[game_type] += policy_won
+
+    by_contract = {
+        game_type: ValidationContractMetrics(
+            policy_payments=tuple(contract_policy_payments[game_type]),
+            heuristic_payments=tuple(contract_heuristic_payments[game_type]),
+            deltas=tuple(contract_deltas[game_type]),
+            policy_wins=contract_policy_wins[game_type],
         )
-        policy_wins += int(focal_seat in policy_result.game_result.winner_players)
+        for game_type in contract_deltas
+    }
 
     return ValidationMetrics(
         games=games,
@@ -192,7 +263,47 @@ def validate_policy(
         deltas=tuple(deltas),
         policy_wins=policy_wins,
         heuristic_wins=heuristic_wins,
+        by_contract=by_contract,
     )
+
+
+def _print_rollout_contract_metrics(
+    metrics: RolloutMetrics,
+    *,
+    reward_scale: float,
+) -> None:
+    print("  rollout by contract")
+    for game_type in GameType:
+        contract = metrics.by_contract.get(game_type)
+        if contract is None:
+            print(f"    {game_type.value:<12} n={0:>5}  no games")
+            continue
+
+        print(
+            f"    {game_type.value:<12} "
+            f"n={contract.games:>5,}  "
+            f"pay={contract.mean_payment:>+8.3f}  "
+            f"reward={contract.mean_reward(reward_scale):>+7.4f}  "
+            f"win={contract.win_rate:>6.2%}"
+        )
+
+
+def _print_validation_contract_metrics(metrics: ValidationMetrics) -> None:
+    print("    validation by contract")
+    for game_type in GameType:
+        contract = metrics.by_contract.get(game_type)
+        if contract is None:
+            print(f"      {game_type.value:<12} n={0:>5}  no games")
+            continue
+
+        print(
+            f"      {game_type.value:<12} "
+            f"n={contract.games:>5,}  "
+            f"ppo={contract.mean_policy_payment:>+8.3f}  "
+            f"heur={contract.mean_heuristic_payment:>+8.3f}  "
+            f"delta={contract.mean_delta:>+8.3f}  "
+            f"win={contract.policy_win_rate:>6.2%}"
+        )
 
 
 def _snapshot_agent(
@@ -221,6 +332,8 @@ def collect_rollout(
     self_play_opponent_probability: float,
     self_play_agents: tuple[PPOCardPlayAgent, ...],
     reward_scale: float,
+    gae_gamma: float,
+    gae_lambda: float,
 ) -> tuple[PPORolloutBuffer, RolloutMetrics]:
     if games <= 0:
         raise ValueError("rollout games must be greater than zero.")
@@ -234,6 +347,10 @@ def collect_rollout(
         )
     if reward_scale <= 0.0:
         raise ValueError("reward scale must be positive.")
+    if not 0.0 < gae_gamma <= 1.0:
+        raise ValueError("GAE gamma must be in (0, 1].")
+    if not 0.0 <= gae_lambda <= 1.0:
+        raise ValueError("GAE lambda must be between 0 and 1.")
 
     rollout = PPORolloutBuffer()
     learner = PPOCardPlayAgent(
@@ -248,6 +365,8 @@ def collect_rollout(
     random_opponents = 0
     heuristic_opponents = 0
     self_play_opponents = 0
+    contract_payments: dict[GameType, list[int]] = defaultdict(list)
+    contract_wins: dict[GameType, int] = defaultdict(int)
 
     for local_game_index in range(games):
         game_index = global_game_offset + local_game_index
@@ -267,8 +386,7 @@ def collect_rollout(
                 agents.append(RandomAgent(rng=random.Random(opponent_seed)))
                 random_opponents += 1
             elif (
-                draw
-                < random_opponent_probability + self_play_opponent_probability
+                draw < random_opponent_probability + self_play_opponent_probability
                 and self_play_agents
             ):
                 agents.append(selection_rng.choice(self_play_agents))
@@ -293,9 +411,29 @@ def collect_rollout(
             )
 
         payment = result.payments[focal_seat]
+        won = int(focal_seat in result.game_result.winner_players)
         payments.append(payment)
-        wins += int(focal_seat in result.game_result.winner_players)
-        rollout.add_episode(trajectory, payment * reward_scale)
+        wins += won
+
+        game_type = result.contract.game_type
+        contract_payments[game_type].append(payment)
+        contract_wins[game_type] += won
+
+        rollout.add_episode(
+            trajectory,
+            payment * reward_scale,
+            gamma=gae_gamma,
+            gae_lambda=gae_lambda,
+        )
+
+    by_contract = {
+        game_type: ContractRolloutMetrics(
+            games=len(game_payments),
+            wins=contract_wins[game_type],
+            payments=tuple(game_payments),
+        )
+        for game_type, game_payments in contract_payments.items()
+    }
 
     return rollout, RolloutMetrics(
         games=games,
@@ -305,6 +443,7 @@ def collect_rollout(
         random_opponents=random_opponents,
         heuristic_opponents=heuristic_opponents,
         self_play_opponents=self_play_opponents,
+        by_contract=by_contract,
     )
 
 
@@ -327,6 +466,8 @@ def train(
     opponent_pool_size: int,
     snapshot_every: int,
     reward_scale: float,
+    gae_gamma: float,
+    gae_lambda: float,
     validation_every: int,
     validation_games: int,
     validation_seed: int,
@@ -346,6 +487,10 @@ def train(
         raise ValueError("snapshot_every must be greater than zero.")
     if opponent_pool_size < 0:
         raise ValueError("opponent_pool_size cannot be negative.")
+    if not 0.0 < gae_gamma <= 1.0:
+        raise ValueError("GAE gamma must be in (0, 1].")
+    if not 0.0 <= gae_lambda <= 1.0:
+        raise ValueError("GAE lambda must be between 0 and 1.")
     if random_opponent_probability + self_play_opponent_probability > 1.0:
         raise ValueError(
             "random and self-play opponent probabilities cannot sum above one."
@@ -355,8 +500,12 @@ def train(
     torch.manual_seed(seed)
     device = resolve_device(device_name)
 
+    input_size, observation_version = checkpoint_observation_spec(
+        init_checkpoint,
+        device=device,
+    )
     model = ActorCriticCardPlayNetwork(
-        input_size=OBSERVATION_FEATURE_SIZE,
+        input_size=input_size,
         hidden_sizes=hidden_sizes,
         action_count=ACTION_COUNT,
     ).to(device)
@@ -384,6 +533,8 @@ def train(
     print("PPO card-play training with fixed validation and opponent pool")
     print("=" * 104)
     print(f"Initialized from:           {init_checkpoint} ({initialization_kind})")
+    print(f"Observation version:        {observation_version}")
+    print(f"Observation features:       {input_size}")
     print(f"Device:                     {device}")
     print(f"Iterations:                 {iterations}")
     print(f"Rollout games / iteration:  {rollout_games:,}")
@@ -393,6 +544,8 @@ def train(
     print(f"Clip epsilon:               {clip_epsilon:g}")
     print(f"Entropy coefficient:        {entropy_coefficient:g}")
     print(f"Reward scale:               {reward_scale:g}")
+    print(f"GAE gamma:                  {gae_gamma:g}")
+    print(f"GAE lambda:                 {gae_lambda:g}")
     print(
         "Opponent mix:               "
         f"{random_opponent_probability:.0%} Random / "
@@ -422,6 +575,8 @@ def train(
         validation_delta=initial_validation.mean_delta,
         seed=seed,
         initialized_from=init_checkpoint,
+        gae_gamma=gae_gamma,
+        gae_lambda=gae_lambda,
     )
 
     print(
@@ -432,6 +587,7 @@ def train(
         f" | win {initial_validation.policy_win_rate:.2%}"
         "  [val-best]"
     )
+    _print_validation_contract_metrics(initial_validation)
     print()
 
     for iteration in range(1, iterations + 1):
@@ -445,6 +601,8 @@ def train(
             self_play_opponent_probability=self_play_opponent_probability,
             self_play_agents=tuple(opponent_pool),
             reward_scale=reward_scale,
+            gae_gamma=gae_gamma,
+            gae_lambda=gae_lambda,
         )
         total_games += rollout_games
 
@@ -471,6 +629,8 @@ def train(
             validation_delta=None,
             seed=seed,
             initialized_from=init_checkpoint,
+            gae_gamma=gae_gamma,
+            gae_lambda=gae_lambda,
         )
 
         if (
@@ -495,6 +655,10 @@ def train(
             f"| pool {len(opponent_pool):>2} "
             f"| {elapsed:>7.1f}s"
         )
+        _print_rollout_contract_metrics(
+            rollout_metrics,
+            reward_scale=reward_scale,
+        )
 
         if iteration % validation_every == 0 or iteration == iterations:
             validation = validate_policy(
@@ -516,6 +680,8 @@ def train(
                     validation_delta=validation.mean_delta,
                     seed=seed,
                     initialized_from=init_checkpoint,
+                    gae_gamma=gae_gamma,
+                    gae_lambda=gae_lambda,
                 )
                 marker = "  [val-best]"
 
@@ -527,6 +693,7 @@ def train(
                 f" | win {validation.policy_win_rate:.2%}"
                 f"{marker}"
             )
+            _print_validation_contract_metrics(validation)
 
     print("\nPPO training complete")
     print("-" * 104)
@@ -578,6 +745,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--opponent-pool-size", type=int, default=8)
     parser.add_argument("--snapshot-every", type=int, default=5)
     parser.add_argument("--reward-scale", type=float, default=0.01)
+    parser.add_argument(
+        "--gae-gamma",
+        type=float,
+        default=1.0,
+        help=(
+            "Discount factor between consecutive focal-player decisions (default: 1.0)."
+        ),
+    )
+    parser.add_argument(
+        "--gae-lambda",
+        type=float,
+        default=0.95,
+        help="GAE bias/variance trade-off parameter (default: 0.95).",
+    )
     parser.add_argument("--validation-every", type=int, default=5)
     parser.add_argument("--validation-games", type=int, default=2_000)
     parser.add_argument("--validation-seed", type=int, default=20_260_918)
@@ -608,6 +789,8 @@ def main() -> None:
         opponent_pool_size=args.opponent_pool_size,
         snapshot_every=args.snapshot_every,
         reward_scale=args.reward_scale,
+        gae_gamma=args.gae_gamma,
+        gae_lambda=args.gae_lambda,
         validation_every=args.validation_every,
         validation_games=args.validation_games,
         validation_seed=args.validation_seed,

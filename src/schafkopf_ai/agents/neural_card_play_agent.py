@@ -10,14 +10,18 @@ from schafkopf_ai.game.bidding import BiddingAction, BiddingObservation
 from schafkopf_ai.game.card import Card
 from schafkopf_ai.game.observation import PlayerObservation
 from schafkopf_ai.training.behavior_cloning import (
-    CardPlayPolicyNetwork,
+    architecture_for_observation_version,
+    create_card_play_policy,
     mask_illegal_logits,
 )
 from schafkopf_ai.training.card_play_encoding import (
     ACTION_COUNT,
     OBSERVATION_FEATURE_SIZE,
     action_index_to_card,
-    encode_card_play,
+)
+from schafkopf_ai.training.observation_encoding import (
+    encode_card_play_for_version,
+    resolve_checkpoint_observation_version,
 )
 
 from .agent import Agent
@@ -46,6 +50,13 @@ class NeuralCardPlayAgent(Agent):
             HeuristicAgent() if bidding_agent is None else bidding_agent
         )
 
+    @property
+    def observation_version(self) -> str:
+        version = getattr(self.model, "observation_version", None)
+        if not isinstance(version, str):
+            raise TypeError("Neural card-play model has no observation version.")
+        return version
+
     @classmethod
     def from_checkpoint(
         cls,
@@ -66,30 +77,45 @@ class NeuralCardPlayAgent(Agent):
         action_count = int(checkpoint.get("action_count", ACTION_COUNT))
         hidden_sizes_raw = checkpoint.get("hidden_sizes", (512, 256))
 
-        if (
-            not isinstance(hidden_sizes_raw, (tuple, list))
-            or len(hidden_sizes_raw) != 2
-        ):
-            raise ValueError("Checkpoint hidden_sizes must contain exactly two values.")
-
-        hidden_sizes = (int(hidden_sizes_raw[0]), int(hidden_sizes_raw[1]))
-
-        if input_size != OBSERVATION_FEATURE_SIZE:
+        if not isinstance(hidden_sizes_raw, (tuple, list)) or len(hidden_sizes_raw) < 2:
             raise ValueError(
-                "Checkpoint observation size does not match the current encoder: "
-                f"{input_size} != {OBSERVATION_FEATURE_SIZE}."
+                "Checkpoint hidden_sizes must contain at least two values."
             )
+
+        hidden_sizes = tuple(int(value) for value in hidden_sizes_raw)
+        gru_hidden_size = int(checkpoint.get("gru_hidden_size") or 128)
+
+        observation_version = resolve_checkpoint_observation_version(
+            input_size=input_size,
+            explicit_version=checkpoint.get("observation_version"),
+        )
+        expected_architecture = architecture_for_observation_version(
+            observation_version
+        )
+        architecture = checkpoint.get("architecture", expected_architecture)
+        if not isinstance(architecture, str):
+            raise TypeError("Checkpoint architecture must be a string.")
+        if observation_version == "v3" and architecture != expected_architecture:
+            raise ValueError(
+                "V3 checkpoint architecture does not match its observation version: "
+                f"{architecture} != {expected_architecture}."
+            )
+
         if action_count != ACTION_COUNT:
             raise ValueError(
                 "Checkpoint action count does not match the current card mapping: "
                 f"{action_count} != {ACTION_COUNT}."
             )
 
-        model = CardPlayPolicyNetwork(
+        model = create_card_play_policy(
             input_size=input_size,
             hidden_sizes=hidden_sizes,
+            gru_hidden_size=gru_hidden_size,
             action_count=action_count,
+            architecture=architecture,
         )
+        if model.observation_version != observation_version:
+            raise RuntimeError("Checkpoint observation version could not be restored.")
 
         state_dict: Any = checkpoint.get("model_state_dict")
         if not isinstance(state_dict, dict):
@@ -116,7 +142,11 @@ class NeuralCardPlayAgent(Agent):
         if len(legal_cards) == 1:
             return legal_cards[0]
 
-        encoded = encode_card_play(observation, legal_cards)
+        encoded = encode_card_play_for_version(
+            self.observation_version,
+            observation,
+            legal_cards,
+        )
         features = torch.tensor(
             encoded.features,
             dtype=torch.float32,

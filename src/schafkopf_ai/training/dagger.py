@@ -86,6 +86,11 @@ def aggregate_dagger_arrays(
     """
     if base.example_count <= 0 or additions.example_count <= 0:
         raise ValueError("Both base and DAgger datasets must contain examples.")
+    if base.features.shape[1] != additions.features.shape[1]:
+        raise ValueError(
+            "Base and DAgger datasets use different observation sizes: "
+            f"{base.features.shape[1]} != {additions.features.shape[1]}."
+        )
 
     next_game_id = int(base.game_ids.max()) + 1
     addition_ids = additions.game_ids.astype(np.uint64)
@@ -111,5 +116,21 @@ def aggregate_dagger_arrays(
         legal_counts=np.concatenate(
             (base.legal_counts, additions.legal_counts),
             axis=0,
+        ),
+        contract_ids=(
+            np.concatenate(
+                (base.contract_ids, additions.contract_ids),
+                axis=0,
+            )
+            if base.contract_ids is not None and additions.contract_ids is not None
+            else None
+        ),
+        role_ids=(
+            np.concatenate(
+                (base.role_ids, additions.role_ids),
+                axis=0,
+            )
+            if base.role_ids is not None and additions.role_ids is not None
+            else None
         ),
     )

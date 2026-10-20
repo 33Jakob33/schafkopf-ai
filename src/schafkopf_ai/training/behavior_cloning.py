@@ -10,7 +10,17 @@ import torch
 from torch import Tensor, nn
 from torch.utils.data import Dataset
 
-from .card_play_encoding import ACTION_COUNT, OBSERVATION_FEATURE_SIZE
+from .card_play_encoding import ACTION_COUNT, CARD_COUNT, OBSERVATION_FEATURE_SIZE
+from .card_play_encoding_v2 import OBSERVATION_V2_FEATURE_SIZE
+from .card_play_encoding_v3 import (
+    HISTORY_STEP_FEATURE_SIZE,
+    MAX_PUBLIC_HISTORY_PLAYS,
+    OBSERVATION_V3_FEATURE_SIZE,
+)
+from .observation_encoding import (
+    infer_observation_version,
+    try_infer_observation_version,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +32,8 @@ class BehaviorCloningArrays:
     targets: np.ndarray
     game_ids: np.ndarray
     legal_counts: np.ndarray
+    contract_ids: np.ndarray | None = None
+    role_ids: np.ndarray | None = None
 
     @property
     def example_count(self) -> int:
@@ -47,6 +59,8 @@ class BehaviorCloningDataset(Dataset[tuple[Tensor, Tensor, Tensor]]):
 class CardPlayPolicyNetwork(nn.Module):
     """Simple MLP policy over the 32 physical card actions."""
 
+    architecture = "mlp_v1"
+
     def __init__(
         self,
         *,
@@ -60,6 +74,7 @@ class CardPlayPolicyNetwork(nn.Module):
         self.input_size = input_size
         self.hidden_sizes = hidden_sizes
         self.action_count = action_count
+        self.observation_version = try_infer_observation_version(input_size)
 
         self.network = nn.Sequential(
             nn.Linear(input_size, first_hidden),
@@ -71,6 +86,185 @@ class CardPlayPolicyNetwork(nn.Module):
 
     def forward(self, features: Tensor) -> Tensor:
         return cast(Tensor, self.network(features))
+
+
+class DeepCardPlayPolicyNetwork(nn.Module):
+    """Configurable deeper MLP used for card-play capacity experiments."""
+
+    architecture = "mlp_deep_v1"
+
+    def __init__(
+        self,
+        *,
+        input_size: int = OBSERVATION_V2_FEATURE_SIZE,
+        hidden_sizes: tuple[int, ...] = (1024, 512, 256),
+        action_count: int = ACTION_COUNT,
+    ) -> None:
+        super().__init__()
+
+        if len(hidden_sizes) < 2:
+            raise ValueError("Deep MLP requires at least two hidden layers.")
+        if any(size <= 0 for size in hidden_sizes):
+            raise ValueError("All hidden-layer sizes must be positive.")
+
+        self.input_size = input_size
+        self.hidden_sizes = hidden_sizes
+        self.action_count = action_count
+        self.observation_version = try_infer_observation_version(input_size)
+
+        layers: list[nn.Module] = []
+        previous = input_size
+        for hidden_size in hidden_sizes:
+            layers.append(nn.Linear(previous, hidden_size))
+            layers.append(nn.ReLU())
+            previous = hidden_size
+        layers.append(nn.Linear(previous, action_count))
+        self.network = nn.Sequential(*layers)
+
+    def forward(self, features: Tensor) -> Tensor:
+        return cast(Tensor, self.network(features))
+
+
+class GRUCardPlayPolicyNetwork(nn.Module):
+    """
+    Hybrid V3 policy with a structured V2 branch and a temporal GRU branch.
+
+    The first 222 inputs are the unchanged V2 features. The remaining inputs
+    contain 31 zero-padded public-play steps. The GRU reads only public history;
+    its final valid hidden state is fused with the structured V2 representation.
+    """
+
+    architecture = "gru_v1"
+
+    def __init__(
+        self,
+        *,
+        input_size: int = OBSERVATION_V3_FEATURE_SIZE,
+        hidden_sizes: tuple[int, int] = (512, 256),
+        gru_hidden_size: int = 128,
+        action_count: int = ACTION_COUNT,
+    ) -> None:
+        super().__init__()
+
+        if input_size != OBSERVATION_V3_FEATURE_SIZE:
+            raise ValueError(
+                "GRU policy requires the V3 observation size: "
+                f"{input_size} != {OBSERVATION_V3_FEATURE_SIZE}."
+            )
+        if gru_hidden_size <= 0:
+            raise ValueError("GRU hidden size must be greater than zero.")
+
+        structured_hidden_size, fusion_hidden_size = hidden_sizes
+
+        self.input_size = input_size
+        self.hidden_sizes = hidden_sizes
+        self.gru_hidden_size = gru_hidden_size
+        self.action_count = action_count
+        self.observation_version = "v3"
+
+        self.structured_encoder = nn.Sequential(
+            nn.Linear(OBSERVATION_V2_FEATURE_SIZE, structured_hidden_size),
+            nn.ReLU(),
+        )
+        self.history_gru = nn.GRU(
+            input_size=HISTORY_STEP_FEATURE_SIZE,
+            hidden_size=gru_hidden_size,
+            batch_first=True,
+        )
+        self.fusion = nn.Sequential(
+            nn.Linear(structured_hidden_size + gru_hidden_size, fusion_hidden_size),
+            nn.ReLU(),
+            nn.Linear(fusion_hidden_size, action_count),
+        )
+
+    def forward(self, features: Tensor) -> Tensor:
+        if features.ndim != 2 or features.shape[1] != self.input_size:
+            raise ValueError(
+                "GRU policy expects a two-dimensional V3 feature batch with "
+                f"width {self.input_size}; got {tuple(features.shape)}."
+            )
+
+        structured = features[:, :OBSERVATION_V2_FEATURE_SIZE]
+        history_flat = features[:, OBSERVATION_V2_FEATURE_SIZE:]
+        history = history_flat.reshape(
+            -1,
+            MAX_PUBLIC_HISTORY_PLAYS,
+            HISTORY_STEP_FEATURE_SIZE,
+        )
+
+        structured_hidden = self.structured_encoder(structured)
+        history_outputs, _ = self.history_gru(history)
+
+        # Every real history step has exactly one active card bit. This lets us
+        # recover each unpadded sequence length without storing another feature.
+        played = history[:, :, :CARD_COUNT].abs().sum(dim=2) > 0
+        lengths = played.sum(dim=1)
+        last_indices = lengths.clamp_min(1) - 1
+        batch_indices = torch.arange(features.shape[0], device=features.device)
+        history_hidden = history_outputs[batch_indices, last_indices]
+        history_hidden = history_hidden * (lengths > 0).unsqueeze(1)
+
+        fused = torch.cat((structured_hidden, history_hidden), dim=1)
+        return cast(Tensor, self.fusion(fused))
+
+
+CardPlayPolicyModel = (
+    CardPlayPolicyNetwork | DeepCardPlayPolicyNetwork | GRUCardPlayPolicyNetwork
+)
+
+
+def architecture_for_observation_version(version: str) -> str:
+    """Return the default policy architecture for an observation encoding."""
+    if version == "v3":
+        return GRUCardPlayPolicyNetwork.architecture
+    return CardPlayPolicyNetwork.architecture
+
+
+def create_card_play_policy(
+    *,
+    input_size: int,
+    hidden_sizes: tuple[int, ...] = (512, 256),
+    gru_hidden_size: int = 128,
+    action_count: int = ACTION_COUNT,
+    architecture: str | None = None,
+) -> CardPlayPolicyModel:
+    """Create a card-play policy while keeping legacy checkpoint defaults."""
+    version = infer_observation_version(input_size)
+    selected = architecture or architecture_for_observation_version(version)
+
+    if selected == GRUCardPlayPolicyNetwork.architecture:
+        if version != "v3":
+            raise ValueError("GRU card-play policy requires V3 observations.")
+        if len(hidden_sizes) != 2:
+            raise ValueError("GRU policy requires exactly two hidden sizes.")
+        return GRUCardPlayPolicyNetwork(
+            input_size=input_size,
+            hidden_sizes=(hidden_sizes[0], hidden_sizes[1]),
+            gru_hidden_size=gru_hidden_size,
+            action_count=action_count,
+        )
+
+    if selected == DeepCardPlayPolicyNetwork.architecture:
+        if version == "v3":
+            raise ValueError("Deep MLP is intended for structured V1/V2 observations.")
+        return DeepCardPlayPolicyNetwork(
+            input_size=input_size,
+            hidden_sizes=hidden_sizes,
+            action_count=action_count,
+        )
+
+    if selected == CardPlayPolicyNetwork.architecture:
+        if version == "v3":
+            raise ValueError("V3 observations require the GRU architecture.")
+        if len(hidden_sizes) != 2:
+            raise ValueError("Legacy MLP requires exactly two hidden sizes.")
+        return CardPlayPolicyNetwork(
+            input_size=input_size,
+            hidden_sizes=(hidden_sizes[0], hidden_sizes[1]),
+            action_count=action_count,
+        )
+
+    raise ValueError(f"Unsupported card-play architecture {selected!r}.")
 
 
 def mask_illegal_logits(logits: Tensor, legal_mask: Tensor) -> Tensor:
@@ -107,6 +301,10 @@ def load_behavior_cloning_arrays(path: str | Path) -> BehaviorCloningArrays:
             targets=data["targets"],
             game_ids=data["game_ids"],
             legal_counts=data["legal_counts"],
+            contract_ids=(
+                data["contract_ids"] if "contract_ids" in data.files else None
+            ),
+            role_ids=data["role_ids"] if "role_ids" in data.files else None,
         )
 
     _validate_arrays(arrays)
@@ -123,14 +321,19 @@ def save_behavior_cloning_arrays(
     dataset_path = Path(path)
     dataset_path.parent.mkdir(parents=True, exist_ok=True)
 
-    np.savez_compressed(
-        dataset_path,
-        features=arrays.features,
-        legal_masks=arrays.legal_masks,
-        targets=arrays.targets,
-        game_ids=arrays.game_ids,
-        legal_counts=arrays.legal_counts,
-    )
+    payload: dict[str, np.ndarray] = {
+        "features": arrays.features,
+        "legal_masks": arrays.legal_masks,
+        "targets": arrays.targets,
+        "game_ids": arrays.game_ids,
+        "legal_counts": arrays.legal_counts,
+    }
+    if arrays.contract_ids is not None:
+        payload["contract_ids"] = arrays.contract_ids
+    if arrays.role_ids is not None:
+        payload["role_ids"] = arrays.role_ids
+
+    np.savez_compressed(dataset_path, **payload)  # type: ignore[arg-type]
 
 
 def split_indices_by_game(
@@ -169,15 +372,75 @@ def split_indices_by_game(
     return train_indices, validation_indices
 
 
+def filter_indices_by_role(
+    indices: list[int],
+    role_ids: np.ndarray,
+    *,
+    role_id: int,
+) -> list[int]:
+    """Select examples belonging to one specialist role."""
+    return [index for index in indices if int(role_ids[index]) == role_id]
+
+
+def filter_training_indices(
+    indices: list[int],
+    legal_counts: np.ndarray,
+    *,
+    nontrivial_only: bool,
+) -> list[int]:
+    """Optionally drop forced moves, which carry zero masked-CE learning signal."""
+    if not nontrivial_only:
+        return list(indices)
+    return [index for index in indices if int(legal_counts[index]) > 1]
+
+
+def contract_balance_weights(
+    contract_ids: np.ndarray,
+    indices: list[int],
+    *,
+    alpha: float,
+) -> np.ndarray:
+    """
+    Return per-example weights for tempered contract rebalancing.
+
+    alpha=0 preserves the natural dataset distribution. alpha=1 gives each
+    observed contract equal expected sampling mass. Values in between (for
+    example 0.5) moderately upweight rare contracts without forcing a fully
+    uniform contract distribution.
+    """
+    if not 0.0 <= alpha <= 1.0:
+        raise ValueError("Contract balance alpha must be between 0 and 1.")
+    if not indices:
+        raise ValueError("Cannot compute sampling weights for no examples.")
+
+    selected = contract_ids[np.asarray(indices, dtype=np.int64)].astype(np.int64)
+    counts = np.bincount(selected, minlength=5)
+
+    weights = np.empty(len(indices), dtype=np.float64)
+    for position, contract_id in enumerate(selected.tolist()):
+        count = int(counts[contract_id])
+        if count <= 0:
+            raise RuntimeError("Observed contract has zero frequency.")
+        weights[position] = count ** (-alpha)
+
+    mean_weight = float(weights.mean())
+    if mean_weight <= 0.0:
+        raise RuntimeError("Contract sampling weights have non-positive mean.")
+    return weights / mean_weight
+
+
 def _validate_arrays(arrays: BehaviorCloningArrays) -> None:
     example_count = arrays.example_count
 
-    if arrays.features.shape != (example_count, OBSERVATION_FEATURE_SIZE):
+    if arrays.features.ndim != 2 or arrays.features.shape[0] != example_count:
         raise ValueError(
             "Unexpected feature shape: "
-            f"{arrays.features.shape}; expected "
-            f"({example_count}, {OBSERVATION_FEATURE_SIZE})."
+            f"{arrays.features.shape}; expected a two-dimensional array "
+            f"with {example_count} rows."
         )
+
+    # Also validates that the dataset uses a supported observation encoding.
+    infer_observation_version(int(arrays.features.shape[1]))
 
     if arrays.legal_masks.shape != (example_count, ACTION_COUNT):
         raise ValueError(
@@ -194,6 +457,20 @@ def _validate_arrays(arrays: BehaviorCloningArrays) -> None:
 
     if arrays.targets.shape != (example_count,):
         raise ValueError(f"Unexpected target shape: {arrays.targets.shape}.")
+
+    if arrays.contract_ids is not None:
+        if arrays.contract_ids.shape != (example_count,):
+            raise ValueError(
+                f"Unexpected contract_ids shape: {arrays.contract_ids.shape}."
+            )
+        if np.any(arrays.contract_ids >= 5):
+            raise ValueError("Dataset contains an invalid contract id.")
+
+    if arrays.role_ids is not None:
+        if arrays.role_ids.shape != (example_count,):
+            raise ValueError(f"Unexpected role_ids shape: {arrays.role_ids.shape}.")
+        if np.any(arrays.role_ids >= 8):
+            raise ValueError("Dataset contains an invalid specialist role id.")
 
     if example_count == 0:
         raise ValueError("Behavioral-cloning dataset cannot be empty.")

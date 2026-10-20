@@ -8,16 +8,14 @@ from torch.distributions import Categorical
 from schafkopf_ai.game.bidding import BiddingAction, BiddingObservation
 from schafkopf_ai.game.card import Card
 from schafkopf_ai.game.observation import PlayerObservation
-from schafkopf_ai.training.card_play_encoding import (
-    action_index_to_card,
-    encode_card_play,
-)
+from schafkopf_ai.training.behavior_cloning import mask_illegal_logits
+from schafkopf_ai.training.card_play_encoding import action_index_to_card
+from schafkopf_ai.training.observation_encoding import encode_card_play_for_version
 from schafkopf_ai.training.ppo import (
     ActorCriticCardPlayNetwork,
     PPOStep,
     load_ppo_model,
 )
-from schafkopf_ai.training.behavior_cloning import mask_illegal_logits
 
 from .agent import Agent
 from .heuristic_agent import HeuristicAgent
@@ -45,6 +43,13 @@ class PPOCardPlayAgent(Agent):
         self.record_trajectory = record_trajectory
         self._trajectory: list[PPOStep] = []
 
+    @property
+    def observation_version(self) -> str:
+        version = self.model.observation_version
+        if not isinstance(version, str):
+            raise TypeError("PPO card-play model has no observation version.")
+        return version
+
     @classmethod
     def from_checkpoint(
         cls,
@@ -71,7 +76,11 @@ class PPOCardPlayAgent(Agent):
         if not legal_cards:
             raise ValueError("No legal cards available.")
 
-        encoded = encode_card_play(observation, legal_cards)
+        encoded = encode_card_play_for_version(
+            self.observation_version,
+            observation,
+            legal_cards,
+        )
         features = torch.tensor(
             encoded.features,
             dtype=torch.float32,
@@ -94,9 +103,7 @@ class PPOCardPlayAgent(Agent):
                 action_tensor = masked_logits.argmax(dim=1)
 
             action_index = int(action_tensor.item())
-            log_probability = float(
-                distribution.log_prob(action_tensor).item()
-            )
+            log_probability = float(distribution.log_prob(action_tensor).item())
             value = float(values.item())
 
         chosen_card = action_index_to_card(action_index)

@@ -22,6 +22,30 @@ class BiddingHeuristicConfig:
 
 DEFAULT_BIDDING_HEURISTIC_CONFIG = BiddingHeuristicConfig()
 
+# Starting point for reducing the severe Wenz-heavy distribution produced by
+# the baseline bidder. This is deliberately named "conservative", not
+# "realistic": users should calibrate it against their desired table/rule set.
+CONSERVATIVE_BIDDING_HEURISTIC_CONFIG = BiddingHeuristicConfig(
+    sauspiel_min_confidence=0.50,
+    wenz_min_confidence=0.76,
+    geier_min_confidence=0.72,
+    solo_min_confidence=0.70,
+    solo_margin=0.12,
+)
+
+BIDDING_PROFILES: tuple[str, ...] = ("baseline", "conservative")
+
+
+def bidding_config_for_profile(profile: str) -> BiddingHeuristicConfig:
+    """Return a named bidding-threshold preset."""
+    if profile == "baseline":
+        return DEFAULT_BIDDING_HEURISTIC_CONFIG
+    if profile == "conservative":
+        return CONSERVATIVE_BIDDING_HEURISTIC_CONFIG
+    raise ValueError(
+        f"Unsupported bidding profile {profile!r}; expected one of {BIDDING_PROFILES}."
+    )
+
 
 @dataclass(frozen=True, slots=True)
 class ContractEvaluation:

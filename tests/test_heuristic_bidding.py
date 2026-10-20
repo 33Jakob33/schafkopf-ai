@@ -1,5 +1,6 @@
 from schafkopf_ai.agents.heuristic_bidding import (
     BiddingHeuristicConfig,
+    bidding_config_for_profile,
     evaluate_contract,
     preferred_contract,
 )
@@ -177,3 +178,12 @@ def test_exceptionally_strong_solo_can_beat_sauspiel_margin() -> None:
 
     assert choice is not None
     assert choice.contract == solo
+
+
+def test_conservative_bidding_profile_is_stricter_for_wenz() -> None:
+    baseline = bidding_config_for_profile("baseline")
+    conservative = bidding_config_for_profile("conservative")
+
+    assert conservative.wenz_min_confidence > baseline.wenz_min_confidence
+    assert conservative.solo_min_confidence >= baseline.solo_min_confidence
+    assert conservative.sauspiel_min_confidence <= baseline.sauspiel_min_confidence

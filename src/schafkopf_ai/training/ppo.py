@@ -12,6 +12,10 @@ from torch.optim import Optimizer
 
 from .behavior_cloning import mask_illegal_logits
 from .card_play_encoding import ACTION_COUNT, OBSERVATION_FEATURE_SIZE
+from .observation_encoding import (
+    resolve_checkpoint_observation_version,
+    try_infer_observation_version,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +36,7 @@ class PPOBatch:
     actions: Tensor
     old_log_probabilities: Tensor
     old_values: Tensor
+    advantages: Tensor
     returns: Tensor
 
 
@@ -61,6 +66,7 @@ class ActorCriticCardPlayNetwork(nn.Module):
         self.input_size = input_size
         self.hidden_sizes = hidden_sizes
         self.action_count = action_count
+        self.observation_version = try_infer_observation_version(input_size)
 
         self.shared = nn.Sequential(
             nn.Linear(input_size, first_hidden),
@@ -83,23 +89,81 @@ class ActorCriticCardPlayNetwork(nn.Module):
         return logits, values
 
 
+def compute_gae(
+    *,
+    values: list[float],
+    terminal_return: float,
+    gamma: float,
+    gae_lambda: float,
+) -> tuple[list[float], list[float]]:
+    """
+    Compute GAE advantages and value targets for one complete game.
+
+    A Schafkopf episode has no shaped intermediate rewards here: all focal-player
+    card decisions receive zero immediate reward except the last decision, which
+    receives the scaled final settlement. Consecutive time steps are consecutive
+    decisions by the focal player, not every card played at the table.
+    """
+    if not values:
+        raise ValueError("GAE requires at least one value estimate.")
+    if not 0.0 < gamma <= 1.0:
+        raise ValueError("GAE gamma must be in (0, 1].")
+    if not 0.0 <= gae_lambda <= 1.0:
+        raise ValueError("GAE lambda must be between 0 and 1.")
+
+    rewards = [0.0] * len(values)
+    rewards[-1] = float(terminal_return)
+
+    advantages = [0.0] * len(values)
+    gae = 0.0
+
+    for index in range(len(values) - 1, -1, -1):
+        next_value = values[index + 1] if index + 1 < len(values) else 0.0
+        delta = rewards[index] + gamma * next_value - values[index]
+        gae = delta + gamma * gae_lambda * gae
+        advantages[index] = gae
+
+    returns = [
+        advantage + value for advantage, value in zip(advantages, values, strict=True)
+    ]
+    return advantages, returns
+
+
 class PPORolloutBuffer:
     """On-policy rollout storage for complete focal-player trajectories."""
 
     def __init__(self) -> None:
         self._steps: list[PPOStep] = []
+        self._advantages: list[float] = []
         self._returns: list[float] = []
 
     @property
     def sample_count(self) -> int:
         return len(self._steps)
 
-    def add_episode(self, steps: list[PPOStep], terminal_return: float) -> None:
+    def add_episode(
+        self,
+        steps: list[PPOStep],
+        terminal_return: float,
+        *,
+        gamma: float = 1.0,
+        gae_lambda: float = 0.95,
+    ) -> None:
         if not steps:
-            raise ValueError("A PPO episode must contain at least one focal-player step.")
+            raise ValueError(
+                "A PPO episode must contain at least one focal-player step."
+            )
+
+        advantages, returns = compute_gae(
+            values=[step.value for step in steps],
+            terminal_return=terminal_return,
+            gamma=gamma,
+            gae_lambda=gae_lambda,
+        )
 
         self._steps.extend(steps)
-        self._returns.extend([float(terminal_return)] * len(steps))
+        self._advantages.extend(advantages)
+        self._returns.extend(returns)
 
     def as_batch(self, device: torch.device) -> PPOBatch:
         if not self._steps:
@@ -107,7 +171,9 @@ class PPORolloutBuffer:
 
         return PPOBatch(
             features=torch.stack([step.features for step in self._steps]).to(device),
-            legal_masks=torch.stack([step.legal_mask for step in self._steps]).to(device),
+            legal_masks=torch.stack([step.legal_mask for step in self._steps]).to(
+                device
+            ),
             actions=torch.tensor(
                 [step.action for step in self._steps],
                 dtype=torch.long,
@@ -120,6 +186,11 @@ class PPORolloutBuffer:
             ),
             old_values=torch.tensor(
                 [step.value for step in self._steps],
+                dtype=torch.float32,
+                device=device,
+            ),
+            advantages=torch.tensor(
+                self._advantages,
                 dtype=torch.float32,
                 device=device,
             ),
@@ -137,7 +208,11 @@ def _validate_checkpoint_shape(
     model: ActorCriticCardPlayNetwork,
     source_name: str,
 ) -> None:
-    input_size = int(checkpoint.get("input_size", OBSERVATION_FEATURE_SIZE))
+    input_size = int(checkpoint.get("input_size", model.input_size))
+    observation_version = resolve_checkpoint_observation_version(
+        input_size=input_size,
+        explicit_version=checkpoint.get("observation_version"),
+    )
     action_count = int(checkpoint.get("action_count", ACTION_COUNT))
     raw_hidden_sizes = checkpoint.get("hidden_sizes", model.hidden_sizes)
 
@@ -150,6 +225,11 @@ def _validate_checkpoint_shape(
         raise ValueError(
             f"{source_name} observation size does not match PPO model: "
             f"{input_size} != {model.input_size}."
+        )
+    if observation_version != model.observation_version:
+        raise ValueError(
+            f"{source_name} observation version does not match PPO model: "
+            f"{observation_version} != {model.observation_version}."
         )
     if action_count != model.action_count:
         raise ValueError(
@@ -216,6 +296,28 @@ def initialize_from_behavior_checkpoint(
     model.load_state_dict(destination)
 
 
+def checkpoint_observation_spec(
+    checkpoint_path: str | Path,
+    *,
+    device: str | torch.device = "cpu",
+) -> tuple[int, str]:
+    """Return input size and observation version for a BC/DAgger or PPO checkpoint."""
+    checkpoint: Any = torch.load(
+        Path(checkpoint_path),
+        map_location=torch.device(device),
+        weights_only=True,
+    )
+    if not isinstance(checkpoint, dict):
+        raise TypeError("Initial checkpoint must be a dictionary.")
+
+    input_size = int(checkpoint.get("input_size", OBSERVATION_FEATURE_SIZE))
+    version = resolve_checkpoint_observation_version(
+        input_size=input_size,
+        explicit_version=checkpoint.get("observation_version"),
+    )
+    return input_size, version
+
+
 def initialize_from_checkpoint(
     *,
     model: ActorCriticCardPlayNetwork,
@@ -264,6 +366,8 @@ def save_ppo_checkpoint(
     seed: int,
     initialized_from: str | Path | None,
     validation_delta: float | None = None,
+    gae_gamma: float | None = None,
+    gae_lambda: float | None = None,
 ) -> None:
     checkpoint_path = Path(path)
     checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
@@ -275,9 +379,12 @@ def save_ppo_checkpoint(
             "input_size": model.input_size,
             "hidden_sizes": model.hidden_sizes,
             "action_count": model.action_count,
+            "observation_version": model.observation_version,
             "iteration": iteration,
             "mean_payment": mean_payment,
             "validation_delta": validation_delta,
+            "gae_gamma": gae_gamma,
+            "gae_lambda": gae_lambda,
             "seed": seed,
             "initialized_from": (
                 str(initialized_from) if initialized_from is not None else None
@@ -304,6 +411,10 @@ def load_ppo_model(
         raise ValueError("Checkpoint is not a supported PPO actor-critic checkpoint.")
 
     input_size = int(checkpoint.get("input_size", OBSERVATION_FEATURE_SIZE))
+    observation_version = resolve_checkpoint_observation_version(
+        input_size=input_size,
+        explicit_version=checkpoint.get("observation_version"),
+    )
     action_count = int(checkpoint.get("action_count", ACTION_COUNT))
     raw_hidden_sizes = checkpoint.get("hidden_sizes", (512, 256))
     if not isinstance(raw_hidden_sizes, (tuple, list)) or len(raw_hidden_sizes) != 2:
@@ -314,6 +425,8 @@ def load_ppo_model(
         hidden_sizes=(int(raw_hidden_sizes[0]), int(raw_hidden_sizes[1])),
         action_count=action_count,
     ).to(resolved_device)
+    if model.observation_version != observation_version:
+        raise RuntimeError("PPO checkpoint observation version could not be restored.")
 
     state_dict = checkpoint.get("model_state_dict")
     if not isinstance(state_dict, dict):
@@ -347,7 +460,7 @@ def ppo_update(
     batch = rollout.as_batch(device)
     sample_count = batch.actions.shape[0]
 
-    advantages = batch.returns - batch.old_values
+    advantages = batch.advantages
     if sample_count > 1:
         advantages = (advantages - advantages.mean()) / (
             advantages.std(unbiased=False) + 1e-8
@@ -380,11 +493,14 @@ def ppo_update(
             minibatch_advantages = advantages[indices]
 
             unclipped = ratios * minibatch_advantages
-            clipped = torch.clamp(
-                ratios,
-                1.0 - clip_epsilon,
-                1.0 + clip_epsilon,
-            ) * minibatch_advantages
+            clipped = (
+                torch.clamp(
+                    ratios,
+                    1.0 - clip_epsilon,
+                    1.0 + clip_epsilon,
+                )
+                * minibatch_advantages
+            )
             policy_loss = -torch.minimum(unclipped, clipped).mean()
 
             value_loss = F.mse_loss(values, batch.returns[indices])
@@ -400,12 +516,10 @@ def ppo_update(
             optimizer.step()
 
             with torch.no_grad():
-                approximate_kl = (
-                    old_log_probabilities - new_log_probabilities
-                ).mean()
+                approximate_kl = (old_log_probabilities - new_log_probabilities).mean()
                 clip_fraction = (
-                    (ratios - 1.0).abs() > clip_epsilon
-                ).to(torch.float32).mean()
+                    ((ratios - 1.0).abs() > clip_epsilon).to(torch.float32).mean()
+                )
 
             count = int(indices.shape[0])
             total_policy_loss += float(policy_loss.item()) * count
