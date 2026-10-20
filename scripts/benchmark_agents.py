@@ -21,6 +21,7 @@ from schafkopf_ai.evaluation.benchmark import BenchmarkCase, load_manifest, save
 from schafkopf_ai.game.bidding import BiddingAction, BiddingObservation
 from schafkopf_ai.game.card import Card
 from schafkopf_ai.game.observation import PlayerObservation
+from schafkopf_ai.game.game_type import GameType
 from schafkopf_ai.game.rules import RAMSCH_RULES
 from schafkopf_ai.runner.round_runner import RoundRunner
 
@@ -98,7 +99,7 @@ def play_case(case: BenchmarkCase, focal_agent: Agent, benchmark_sha256: str, ag
     ):
         raise RuntimeError(f"Invalid game in benchmark case {case.case_id}")
 
-    if result.contract.game_type.value == "ramsch":
+    if result.contract.game_type is GameType.RAMSCH:
         role = "ramsch"
     elif result.contract.declarer == case.focal_seat:
         role = "declarer"
@@ -181,7 +182,12 @@ def run(args: argparse.Namespace) -> None:
     if args.output.exists():
         raise FileExistsError(f"Refusing to overwrite results: {args.output}")
     agent = load_agent(args.agent, checkpoint=args.checkpoint, factory=args.factory)
-    rows = [play_case(case, agent, digest, args.agent_id) for case in cases]
+    rows = []
+    for case in cases:
+        # Random baseline must not depend on the order of other test cases.
+        if args.agent == "random":
+            agent = RandomAgent(rng=random.Random(case.opponent_seeds[case.focal_seat]))
+        rows.append(play_case(case, agent, digest, args.agent_id))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=FIELDS)
