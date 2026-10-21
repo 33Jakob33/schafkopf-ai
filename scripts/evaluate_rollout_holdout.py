@@ -18,7 +18,29 @@ from pathlib import Path
 from schafkopf_ai.agents.heuristic_agent import HeuristicAgent
 from schafkopf_ai.agents.rollout_card_play_agent import RolloutCardPlayAgent
 from schafkopf_ai.evaluation.paired import run_paired_variant
-from scripts.rollout_ablation import TimedAgent
+from schafkopf_ai.agents.agent import Agent
+from schafkopf_ai.game.bidding import BiddingAction, BiddingObservation
+from schafkopf_ai.game.card import Card
+from schafkopf_ai.game.observation import PlayerObservation
+
+
+class TimedAgent(Agent):
+    def __init__(self, agent: Agent) -> None:
+        self.agent = agent
+        self.decision_seconds: list[float] = []
+
+    def choose_bidding_action(
+        self, observation: BiddingObservation, legal_actions: tuple[BiddingAction, ...]
+    ) -> BiddingAction:
+        return self.agent.choose_bidding_action(observation, legal_actions)
+
+    def choose_card(
+        self, observation: PlayerObservation, legal_cards: tuple[Card, ...]
+    ) -> Card:
+        start = time.perf_counter()
+        chosen = self.agent.choose_card(observation, legal_cards)
+        self.decision_seconds.append(time.perf_counter() - start)
+        return chosen
 
 VARIANTS = {
     "fast-h8-e1": (8, "heuristic", 1),
