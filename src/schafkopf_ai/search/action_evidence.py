@@ -3,6 +3,7 @@
 All hard legality constraints are handled by HiddenStateSampler. This module
 only *ranks* valid determinizations using an imperfect behavioral model.
 """
+
 from __future__ import annotations
 
 import math
@@ -10,7 +11,11 @@ import math
 from schafkopf_ai.agents.heuristic_agent import HeuristicAgent
 from schafkopf_ai.game.game_state import GameState
 from schafkopf_ai.game.observation import PlayerObservation
-from schafkopf_ai.search.hidden_state import Determinization, _public_plays, _starting_player
+from schafkopf_ai.search.hidden_state import (
+    Determinization,
+    _public_plays,
+    _starting_player,
+)
 
 
 def observed_action_log_likelihood(

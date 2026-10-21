@@ -3,6 +3,7 @@
 A case stores RNG seeds rather than hidden cards. RoundRunner deterministically
 recreates the deal. The manifest must be frozen before model evaluation.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -71,7 +72,9 @@ def load_manifest(path: Path) -> tuple[list[BenchmarkCase], str]:
     if payload.get("version") != BENCHMARK_VERSION:
         raise ValueError("Unsupported benchmark version")
     if (payload.get("rules"), payload.get("bidding"), payload.get("opponents")) != (
-        "RAMSCH_RULES", "HeuristicAgent", "RandomAgent"
+        "RAMSCH_RULES",
+        "HeuristicAgent",
+        "RandomAgent",
     ):
         raise ValueError("Unexpected benchmark protocol")
     cases = [

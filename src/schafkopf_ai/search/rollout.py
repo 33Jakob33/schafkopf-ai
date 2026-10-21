@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import math
 import random
 import statistics
-import math
 from dataclasses import dataclass
 from typing import Literal, cast
 
@@ -16,8 +16,8 @@ from schafkopf_ai.game.observation import PlayerObservation
 from schafkopf_ai.game.settlement import settlement_from_game_state
 from schafkopf_ai.runner.game_runner import GameRunner
 
-from .hidden_state import Determinization, HiddenStateSampler
 from .action_evidence import observed_action_log_likelihood
+from .hidden_state import Determinization, HiddenStateSampler
 
 ContinuationKind = Literal["heuristic", "epsilon-heuristic", "random"]
 ContinuationProfile = Literal["heuristic", "mixed"]
@@ -180,7 +180,9 @@ class MonteCarloActionEvaluator:
 
         return tuple(estimates)
 
-    def _sample_deals(self, observation: PlayerObservation) -> tuple[Determinization, ...]:
+    def _sample_deals(
+        self, observation: PlayerObservation
+    ) -> tuple[Determinization, ...]:
         if self.evidence_candidates == 1:
             return self.sampler.sample_many(observation, self.samples_per_action)
         deals = []
@@ -188,8 +190,11 @@ class MonteCarloActionEvaluator:
             candidates = self.sampler.sample_many(observation, self.evidence_candidates)
             scores = [
                 observed_action_log_likelihood(
-                    observation, candidate, agreement_probability=self.evidence_agreement
-                ) for candidate in candidates
+                    observation,
+                    candidate,
+                    agreement_probability=self.evidence_agreement,
+                )
+                for candidate in candidates
             ]
             # Stable normalization prevents underflow on long trick histories.
             high = max(scores)

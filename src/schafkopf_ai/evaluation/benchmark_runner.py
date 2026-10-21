@@ -1,4 +1,5 @@
 """Run existing and future Schafkopf card-play agents on a frozen test suite."""
+
 from __future__ import annotations
 
 import argparse
@@ -9,7 +10,7 @@ import math
 import random
 import statistics
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from schafkopf_ai.agents.agent import Agent
@@ -17,17 +18,30 @@ from schafkopf_ai.agents.heuristic_agent import HeuristicAgent
 from schafkopf_ai.agents.neural_card_play_agent import NeuralCardPlayAgent
 from schafkopf_ai.agents.ppo_card_play_agent import PPOCardPlayAgent
 from schafkopf_ai.agents.random_agent import RandomAgent
-from schafkopf_ai.evaluation.benchmark import BenchmarkCase, load_manifest, save_manifest
+from schafkopf_ai.evaluation.benchmark import (
+    BenchmarkCase,
+    load_manifest,
+    save_manifest,
+)
 from schafkopf_ai.game.bidding import BiddingAction, BiddingObservation
 from schafkopf_ai.game.card import Card
-from schafkopf_ai.game.observation import PlayerObservation
 from schafkopf_ai.game.game_type import GameType
+from schafkopf_ai.game.observation import PlayerObservation
 from schafkopf_ai.game.rules import RAMSCH_RULES
 from schafkopf_ai.runner.round_runner import RoundRunner
 
 FIELDS = (
-    "benchmark_sha256", "agent_id", "case_id", "contract", "role",
-    "focal_seat", "starting_player", "payment", "win", "schneider", "schwarz",
+    "benchmark_sha256",
+    "agent_id",
+    "case_id",
+    "contract",
+    "role",
+    "focal_seat",
+    "starting_player",
+    "payment",
+    "win",
+    "schneider",
+    "schwarz",
 )
 
 
@@ -74,7 +88,9 @@ def load_agent(kind: str, *, checkpoint: Path | None, factory: str | None) -> Ag
     raise ValueError(f"Unknown agent type: {kind}")
 
 
-def play_case(case: BenchmarkCase, focal_agent: Agent, benchmark_sha256: str, agent_id: str) -> dict:
+def play_case(
+    case: BenchmarkCase, focal_agent: Agent, benchmark_sha256: str, agent_id: str
+) -> dict:
     agents: list[Agent] = [
         RandomAgent(rng=random.Random(case.opponent_seeds[seat])) for seat in range(4)
     ]
@@ -141,9 +157,10 @@ def summarise(rows: list[dict]) -> dict:
 
 def run(args: argparse.Namespace) -> None:
     if args.command == "generate":
-        print("Created benchmark SHA256:", save_manifest(
-            args.manifest, count=args.games, seed=args.seed
-        ))
+        print(
+            "Created benchmark SHA256:",
+            save_manifest(args.manifest, count=args.games, seed=args.seed),
+        )
         return
 
     cases, digest = load_manifest(args.manifest)
@@ -156,14 +173,18 @@ def run(args: argparse.Namespace) -> None:
                         raise ValueError(f"Incompatible benchmark manifest in {path}")
                     grouped[row["agent_id"]].append(row)
         for agent_id, rows in sorted(grouped.items()):
-            if len(rows) != len(cases) or {int(r["case_id"]) for r in rows} != set(range(len(cases))):
+            if len(rows) != len(cases) or {int(r["case_id"]) for r in rows} != set(
+                range(len(cases))
+            ):
                 raise ValueError(f"Incomplete or duplicate cases for {agent_id}")
             print(agent_id, json.dumps(summarise(rows), indent=2))
         if len(grouped) > 1:
             baseline_id = args.baseline
             if baseline_id not in grouped:
                 raise ValueError(f"Missing baseline: {baseline_id}")
-            baseline = {int(r["case_id"]): int(r["payment"]) for r in grouped[baseline_id]}
+            baseline = {
+                int(r["case_id"]): int(r["payment"]) for r in grouped[baseline_id]
+            }
             for agent_id, rows in sorted(grouped.items()):
                 if agent_id == baseline_id:
                     continue
@@ -171,10 +192,15 @@ def run(args: argparse.Namespace) -> None:
                     int(row["payment"]) - baseline[int(row["case_id"])] for row in rows
                 ]
                 avg = statistics.fmean(differences)
-                sem = (statistics.stdev(differences) / math.sqrt(len(differences))
-                       if len(differences) > 1 else 0.0)
-                print(f"{agent_id} minus {baseline_id}: {avg:+.3f} "
-                      f"(paired 95% CI [{avg - 1.96*sem:+.3f}, {avg + 1.96*sem:+.3f}])")
+                sem = (
+                    statistics.stdev(differences) / math.sqrt(len(differences))
+                    if len(differences) > 1
+                    else 0.0
+                )
+                print(
+                    f"{agent_id} minus {baseline_id}: {avg:+.3f} "
+                    f"(paired 95% CI [{avg - 1.96 * sem:+.3f}, {avg + 1.96 * sem:+.3f}])"
+                )
         return
 
     if not args.agent_id.strip():
@@ -194,10 +220,13 @@ def run(args: argparse.Namespace) -> None:
         writer.writeheader()
         writer.writerows(rows)
     metadata = {
-        "benchmark_sha256": digest, "agent_id": args.agent_id, "agent_type": args.agent,
+        "benchmark_sha256": digest,
+        "agent_id": args.agent_id,
+        "agent_type": args.agent,
         "checkpoint": str(args.checkpoint) if args.checkpoint else None,
-        "factory": args.factory, "games": len(rows),
-        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "factory": args.factory,
+        "games": len(rows),
+        "timestamp_utc": datetime.now(UTC).isoformat(),
         "results": str(args.output),
     }
     args.output.with_suffix(".metadata.json").write_text(
@@ -214,14 +243,26 @@ def main() -> None:
     gen.add_argument("--manifest", type=Path, required=True)
     gen.add_argument("--games", type=int, default=10_000)
     gen.add_argument("--seed", type=int, default=20261020)
-    evaluate = sub.add_parser("evaluate", help="Evaluate one agent on all manifest cases")
+    evaluate = sub.add_parser(
+        "evaluate", help="Evaluate one agent on all manifest cases"
+    )
     evaluate.add_argument("--manifest", type=Path, required=True)
-    evaluate.add_argument("--agent", choices=["heuristic", "random", "bc", "dagger", "ppo", "custom"], required=True)
-    evaluate.add_argument("--agent-id", required=True, help="Unique model/version label")
+    evaluate.add_argument(
+        "--agent",
+        choices=["heuristic", "random", "bc", "dagger", "ppo", "custom"],
+        required=True,
+    )
+    evaluate.add_argument(
+        "--agent-id", required=True, help="Unique model/version label"
+    )
     evaluate.add_argument("--checkpoint", type=Path)
-    evaluate.add_argument("--factory", help="module:Class (custom agents, e.g. rollouts)")
+    evaluate.add_argument(
+        "--factory", help="module:Class (custom agents, e.g. rollouts)"
+    )
     evaluate.add_argument("--output", type=Path, required=True)
-    compare = sub.add_parser("compare", help="Compare complete matching benchmark results")
+    compare = sub.add_parser(
+        "compare", help="Compare complete matching benchmark results"
+    )
     compare.add_argument("--manifest", type=Path, required=True)
     compare.add_argument("--results", type=Path, nargs="+", required=True)
     compare.add_argument("--baseline", default="heuristic")

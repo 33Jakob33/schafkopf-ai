@@ -1,10 +1,15 @@
 """Tests for frozen benchmark cases and evaluation invariants."""
+
 from pathlib import Path
 
 import pytest
 
 from schafkopf_ai.agents.heuristic_agent import HeuristicAgent
-from schafkopf_ai.evaluation.benchmark import generate_cases, load_manifest, save_manifest
+from schafkopf_ai.evaluation.benchmark import (
+    generate_cases,
+    load_manifest,
+    save_manifest,
+)
 
 
 def test_manifest_is_reproducible(tmp_path: Path) -> None:
