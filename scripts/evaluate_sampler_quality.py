@@ -19,8 +19,10 @@ from schafkopf_ai.evaluation.paired import run_paired_variant
 from schafkopf_ai.game.deck import Deck
 from schafkopf_ai.game.game_state import GameState
 from schafkopf_ai.search.rollout import MonteCarloActionEvaluator
+from schafkopf_ai.search.action_evidence import observed_action_log_likelihood
 
 METHODS = ("unweighted", "weighted")
+BUDGET_METHODS = ("unweighted_32", "weighted_32", "unweighted_full_pool")
 
 
 def snapshots(*, games: int, seed: int, opponents: str, turns: tuple[int, ...]):
@@ -80,6 +82,114 @@ def score_distribution(observation, truth, deals):
         "true_holder_probability": true_mass / n,
     }
 
+
+
+def budget_matched_deals(observation, *, samples, candidates, agreement, seed, max_attempts):
+    """Draw one common proposal pool to isolate action evidence from RNG luck.
+
+    Unweighted and weighted methods each retain one deal per block of
+    `candidates`. The full-pool baseline consumes all proposals, matching
+    the weighted method's proposal-generation budget (but not scoring cost).
+    """
+    evaluator = MonteCarloActionEvaluator(
+        samples_per_action=samples, seed=seed,
+        evidence_candidates=1, max_sampling_attempts=max_attempts,
+    )
+    t0 = time.perf_counter()
+    pool = evaluator.sampler.sample_many(observation, samples * candidates)
+    proposal_time = time.perf_counter() - t0
+    blocks = [pool[i:i + candidates] for i in range(0, len(pool), candidates)]
+    control = tuple(block[0] for block in blocks)
+    t1 = time.perf_counter()
+    weighted = []
+    for block in blocks:
+        scores = [
+            observed_action_log_likelihood(
+                observation, deal, agreement_probability=agreement,
+            )
+            for deal in block
+        ]
+        maximum = max(scores)
+        weights = [math.exp(score - maximum) for score in scores]
+        weighted.append(evaluator.sampler.rng.choices(block, weights=weights, k=1)[0])
+    scoring_time = time.perf_counter() - t1
+    return {
+        "unweighted_32": (control, proposal_time),
+        "weighted_32": (tuple(weighted), proposal_time + scoring_time),
+        "unweighted_full_pool": (pool, proposal_time),
+    }
+
+
+def evaluate_budget_matched(args):
+    if args.games < 1 or args.samples < 1 or args.candidates < 2:
+        raise ValueError("Require games >=1, samples >=1, candidates >=2")
+    if args.output.exists():
+        raise FileExistsError(f"Refusing to overwrite {args.output}")
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    fields = ("game", "turn", "contract", "opponents", "method", "samples",
+              "proposals", "hidden_cards", "brier", "logloss",
+              "true_holder_probability", "seconds")
+    rows = []
+    with args.output.open("w", newline="", encoding="utf-8") as output:
+        writer = csv.DictWriter(output, fieldnames=fields)
+        writer.writeheader()
+        for game_index, turn, observation, truth in snapshots(
+            games=args.games, seed=args.seed, opponents=args.opponents,
+            turns=tuple(args.turns),
+        ):
+            pools = budget_matched_deals(
+                observation, samples=args.samples, candidates=args.candidates,
+                agreement=args.agreement,
+                seed=args.seed + 1_000_003 * game_index + 1_009 * turn,
+                max_attempts=args.max_attempts,
+            )
+            for method, (deals, elapsed) in pools.items():
+                measures = score_distribution(observation, truth, deals)
+                row = {
+                    "game": game_index, "turn": turn,
+                    "contract": observation.contract.game_type.value,
+                    "opponents": args.opponents, "method": method,
+                    "samples": len(deals),
+                    "proposals": args.samples * args.candidates,
+                    "hidden_cards": measures["cards"],
+                    "brier": measures["brier"],
+                    "logloss": measures["logloss"],
+                    "true_holder_probability": measures["true_holder_probability"],
+                    "seconds": elapsed,
+                }
+                rows.append(row)
+                writer.writerow(row)
+                output.flush()
+            if turn == args.turns[-1] and (game_index + 1) % args.progress_every == 0:
+                print(f"{game_index+1}/{args.games} games", flush=True)
+
+    by_key = defaultdict(dict)
+    for row in rows:
+        by_key[(row["game"], row["turn"])][row["method"]] = row
+    report = {
+        "protocol": "common_pool_v1", "seed": args.seed,
+        "games": args.games, "samples": args.samples,
+        "candidates": args.candidates, "agreement": args.agreement,
+        "opponents": args.opponents, "turns": args.turns,
+        "results": {},
+        "paired_brier_improvement": {},
+    }
+    for method in BUDGET_METHODS:
+        subset = [r for r in rows if r["method"] == method]
+        report["results"][method] = {
+            field: statistics.fmean(float(r[field]) for r in subset)
+            for field in ("brier", "logloss", "true_holder_probability", "seconds")
+        }
+    for baseline in ("unweighted_32", "unweighted_full_pool"):
+        differences = [
+            float(group[baseline]["brier"]) - float(group["weighted_32"]["brier"])
+            for group in by_key.values()
+        ]
+        report["paired_brier_improvement"][baseline] = statistics.fmean(differences)
+    args.output.with_suffix(".summary.json").write_text(
+        json.dumps(report, indent=2) + "\n", encoding="utf-8"
+    )
+    print(json.dumps(report, indent=2))
 
 def evaluate(args):
     if args.games < 1 or args.samples < 1 or args.candidates < 2:
@@ -174,10 +284,15 @@ def main():
     parser.add_argument("--max-attempts", type=int, default=5000)
     parser.add_argument("--progress-every", type=int, default=10)
     parser.add_argument("--output", type=Path, default=Path("results/sampler_quality.csv"))
+    parser.add_argument("--budget-matched", action="store_true",
+                        help="Compare methods using one shared proposal pool")
     args = parser.parse_args()
     if args.progress_every < 1:
         parser.error("--progress-every must be >= 1")
-    evaluate(args)
+    if args.budget_matched:
+        evaluate_budget_matched(args)
+    else:
+        evaluate(args)
 
 
 if __name__ == "__main__":
