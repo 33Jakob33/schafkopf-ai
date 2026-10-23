@@ -1,6 +1,4 @@
 """Tests for offline sampler probability metrics, including no truth leakage."""
-import random
-
 from schafkopf_ai.game.deck import Deck
 from schafkopf_ai.game.game_contract import GameContract
 from schafkopf_ai.game.game_state import GameState
