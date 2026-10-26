@@ -1,0 +1,39 @@
+{
+  "protocol": "common_pool_v1",
+  "seed": 20270105,
+  "games": 100,
+  "samples": 32,
+  "candidates": 4,
+  "agreement": 0.7,
+  "opponents": "random",
+  "turns": [
+    4,
+    12,
+    20,
+    28
+  ],
+  "results": {
+    "unweighted_32": {
+      "brier": 0.1996242042824074,
+      "logloss": 0.9686274302691968,
+      "true_holder_probability": 0.41980704365079363,
+      "seconds": 0.0721650505000025
+    },
+    "weighted_32": {
+      "brier": 0.1929605551421958,
+      "logloss": 0.943061808744569,
+      "true_holder_probability": 0.4489652777777778,
+      "seconds": 0.6350160154999867
+    },
+    "unweighted_full_pool": {
+      "brier": 0.19599689915571264,
+      "logloss": 0.9477311063552127,
+      "true_holder_probability": 0.41795306299603174,
+      "seconds": 0.0721650505000025
+    }
+  },
+  "paired_brier_improvement": {
+    "unweighted_32": 0.006663649140211641,
+    "unweighted_full_pool": 0.003036344013516866
+  }
+}
