@@ -1,4 +1,8 @@
 """Smoke tests for the optional web adapter (run with FastAPI + httpx)."""
+import pytest
+
+pytest.importorskip("fastapi")
+pytest.importorskip("httpx")
 from fastapi.testclient import TestClient
 
 from schafkopf_ai.web.api import app
