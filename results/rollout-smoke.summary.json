@@ -1,0 +1,51 @@
+{
+  "seed": 20261020,
+  "results": [
+    {
+      "opponents": "random",
+      "profile": "heuristic",
+      "samples": 8,
+      "evidence_candidates": 1,
+      "games": 2,
+      "delta_mean": 0.0,
+      "delta_ci95": [
+        0.0,
+        0.0
+      ],
+      "rollout_win_rate": 1.0,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.0002113312500569009,
+        "p95": 0.0007802000000083353
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 0.1761485937498719,
+        "p95": 0.7650173999991239
+      },
+      "baseline_decisions": 16,
+      "rollout_decisions": 16
+    },
+    {
+      "opponents": "heuristic",
+      "profile": "heuristic",
+      "samples": 8,
+      "evidence_candidates": 1,
+      "games": 2,
+      "delta_mean": 0.0,
+      "delta_ci95": [
+        0.0,
+        0.0
+      ],
+      "rollout_win_rate": 0.5,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.00018522499988193886,
+        "p95": 0.0007329000000027008
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 0.14095887499979654,
+        "p95": 0.6843967999993765
+      },
+      "baseline_decisions": 16,
+      "rollout_decisions": 16
+    }
+  ]
+}

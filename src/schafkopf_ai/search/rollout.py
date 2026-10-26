@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import random
 import statistics
 from dataclasses import dataclass
@@ -15,6 +16,7 @@ from schafkopf_ai.game.observation import PlayerObservation
 from schafkopf_ai.game.settlement import settlement_from_game_state
 from schafkopf_ai.runner.game_runner import GameRunner
 
+from .action_evidence import observed_action_log_likelihood
 from .hidden_state import Determinization, HiddenStateSampler
 
 ContinuationKind = Literal["heuristic", "epsilon-heuristic", "random"]
@@ -99,7 +101,13 @@ class MonteCarloActionEvaluator:
         max_sampling_attempts: int = 5_000,
         continuation_profile: str = "heuristic",
         epsilon: float = 0.10,
+        evidence_candidates: int = 1,
+        evidence_agreement: float = 0.7,
     ) -> None:
+        if evidence_candidates < 1:
+            raise ValueError("evidence_candidates must be positive")
+        if not 0.0 < evidence_agreement < 1.0:
+            raise ValueError("evidence_agreement must be between zero and one")
         if samples_per_action <= 0:
             raise ValueError("samples_per_action must be positive.")
         if continuation_profile not in CONTINUATION_PROFILES:
@@ -110,6 +118,8 @@ class MonteCarloActionEvaluator:
         if not 0.0 <= epsilon <= 1.0:
             raise ValueError("epsilon must be between zero and one.")
 
+        self.evidence_candidates = evidence_candidates
+        self.evidence_agreement = evidence_agreement
         self.samples_per_action = samples_per_action
         self.seed = seed
         self.continuation_profile = cast(ContinuationProfile, continuation_profile)
@@ -128,10 +138,7 @@ class MonteCarloActionEvaluator:
         if not legal_cards:
             raise ValueError("No legal cards available for rollout evaluation.")
 
-        determinizations = self.sampler.sample_many(
-            observation,
-            self.samples_per_action,
-        )
+        determinizations = self._sample_deals(observation)
         continuation_kinds = self._continuation_kinds(self.samples_per_action)
         evaluation_index = self._evaluation_index
         self._evaluation_index += 1
@@ -172,6 +179,28 @@ class MonteCarloActionEvaluator:
             )
 
         return tuple(estimates)
+
+    def _sample_deals(
+        self, observation: PlayerObservation
+    ) -> tuple[Determinization, ...]:
+        if self.evidence_candidates == 1:
+            return self.sampler.sample_many(observation, self.samples_per_action)
+        deals = []
+        for _ in range(self.samples_per_action):
+            candidates = self.sampler.sample_many(observation, self.evidence_candidates)
+            scores = [
+                observed_action_log_likelihood(
+                    observation,
+                    candidate,
+                    agreement_probability=self.evidence_agreement,
+                )
+                for candidate in candidates
+            ]
+            # Stable normalization prevents underflow on long trick histories.
+            high = max(scores)
+            weights = [math.exp(score - high) for score in scores]
+            deals.append(self.sampler.rng.choices(candidates, weights=weights, k=1)[0])
+        return tuple(deals)
 
     def _continuation_kinds(self, count: int) -> tuple[ContinuationKind, ...]:
         if self.continuation_profile == "heuristic":

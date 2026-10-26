@@ -1,0 +1,33 @@
+{
+  "seed": 20261206,
+  "games": 100,
+  "samples": 32,
+  "candidates": 4,
+  "agreement": 0.7,
+  "opponents": "random",
+  "turns": [
+    4,
+    12,
+    20,
+    28
+  ],
+  "results": {
+    "unweighted": {
+      "brier": 0.203097976603836,
+      "logloss": 0.9850514093229215,
+      "true_holder_probability": 0.410874255952381,
+      "seconds": 0.017585161249999714
+    },
+    "weighted": {
+      "brier": 0.194625320353836,
+      "logloss": 0.9545471471127756,
+      "true_holder_probability": 0.4455215773809524,
+      "seconds": 0.613453513999998
+    }
+  },
+  "paired_improvement": {
+    "brier": 0.008472656250000002,
+    "logloss": 0.03050426221014597,
+    "true_holder_probability": 0.03464732142857143
+  }
+}

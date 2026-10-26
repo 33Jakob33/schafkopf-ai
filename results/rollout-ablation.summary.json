@@ -1,0 +1,557 @@
+{
+  "seed": 20261020,
+  "results": [
+    {
+      "opponents": "random",
+      "profile": "heuristic",
+      "samples": 8,
+      "evidence_candidates": 1,
+      "games": 100,
+      "delta_mean": -4.7,
+      "delta_ci95": [
+        -9.67918562161981,
+        0.27918562161980987
+      ],
+      "rollout_win_rate": 0.85,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.00018436012501069855,
+        "p95": 0.0006732000001647975
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 0.13172441474994911,
+        "p95": 0.5020899999999529
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "random",
+      "profile": "heuristic",
+      "samples": 8,
+      "evidence_candidates": 4,
+      "games": 100,
+      "delta_mean": -2.3,
+      "delta_ci95": [
+        -7.344224155738257,
+        2.744224155738257
+      ],
+      "rollout_win_rate": 0.86,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.000182962500011854,
+        "p95": 0.0006635999998252373
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 0.23107855174997213,
+        "p95": 0.5734393000002456
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "random",
+      "profile": "heuristic",
+      "samples": 32,
+      "evidence_candidates": 1,
+      "games": 100,
+      "delta_mean": -0.4,
+      "delta_ci95": [
+        -4.239183078087148,
+        3.439183078087148
+      ],
+      "rollout_win_rate": 0.87,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.00018274287507438202,
+        "p95": 0.0006714999999530846
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 0.5389674921249571,
+        "p95": 2.0129314999994676
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "random",
+      "profile": "heuristic",
+      "samples": 32,
+      "evidence_candidates": 4,
+      "games": 100,
+      "delta_mean": 0.0,
+      "delta_ci95": [
+        -3.632268401064786,
+        3.632268401064786
+      ],
+      "rollout_win_rate": 0.88,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.00018316462505254093,
+        "p95": 0.0006659999999101274
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 0.933747544999992,
+        "p95": 2.331580300000496
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "random",
+      "profile": "heuristic",
+      "samples": 128,
+      "evidence_candidates": 1,
+      "games": 100,
+      "delta_mean": -0.5,
+      "delta_ci95": [
+        -4.443440020073741,
+        3.443440020073741
+      ],
+      "rollout_win_rate": 0.87,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.00018396449996544107,
+        "p95": 0.0006723000005877111
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 2.154271303624973,
+        "p95": 8.03129489999992
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "random",
+      "profile": "heuristic",
+      "samples": 128,
+      "evidence_candidates": 4,
+      "games": 100,
+      "delta_mean": -2.7,
+      "delta_ci95": [
+        -7.524020218729092,
+        2.1240202187290915
+      ],
+      "rollout_win_rate": 0.84,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.00018262612498119778,
+        "p95": 0.0006668000005447539
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 3.7101316194999368,
+        "p95": 9.299895100000867
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "random",
+      "profile": "mixed",
+      "samples": 8,
+      "evidence_candidates": 1,
+      "games": 100,
+      "delta_mean": 0.1,
+      "delta_ci95": [
+        -2.9958375182483232,
+        3.1958375182483234
+      ],
+      "rollout_win_rate": 0.9,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.00018326125003113704,
+        "p95": 0.0006810000013501849
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 0.11508349350001482,
+        "p95": 0.42719690000012633
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "random",
+      "profile": "mixed",
+      "samples": 8,
+      "evidence_candidates": 4,
+      "games": 100,
+      "delta_mean": 0.8,
+      "delta_ci95": [
+        -2.642266953299493,
+        4.242266953299493
+      ],
+      "rollout_win_rate": 0.9,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.00018386049996479414,
+        "p95": 0.0006683999999950174
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 0.20902284862501574,
+        "p95": 0.49618830000144953
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "random",
+      "profile": "mixed",
+      "samples": 32,
+      "evidence_candidates": 1,
+      "games": 100,
+      "delta_mean": -0.4,
+      "delta_ci95": [
+        -5.18415877578485,
+        4.384158775784849
+      ],
+      "rollout_win_rate": 0.89,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.00018376337499148576,
+        "p95": 0.0006657000012637582
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 0.462833166874957,
+        "p95": 1.6695295999998052
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "random",
+      "profile": "mixed",
+      "samples": 32,
+      "evidence_candidates": 4,
+      "games": 100,
+      "delta_mean": 0.5,
+      "delta_ci95": [
+        -3.728352115914854,
+        4.728352115914854
+      ],
+      "rollout_win_rate": 0.89,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.00018267649995550527,
+        "p95": 0.0006694999992760131
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 0.8607977632499865,
+        "p95": 1.9828233999996883
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "random",
+      "profile": "mixed",
+      "samples": 128,
+      "evidence_candidates": 1,
+      "games": 100,
+      "delta_mean": 0.0,
+      "delta_ci95": [
+        -4.178734040569965,
+        4.178734040569965
+      ],
+      "rollout_win_rate": 0.87,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.00018279312491358723,
+        "p95": 0.0006725000021106098
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 1.8311839762499948,
+        "p95": 6.729946199999176
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "random",
+      "profile": "mixed",
+      "samples": 128,
+      "evidence_candidates": 4,
+      "games": 100,
+      "delta_mean": -0.5,
+      "delta_ci95": [
+        -4.986601827619202,
+        3.986601827619202
+      ],
+      "rollout_win_rate": 0.88,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.00018294549994152476,
+        "p95": 0.0006668999994872138
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 3.4509919707500103,
+        "p95": 8.105609399997775
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "heuristic",
+      "profile": "heuristic",
+      "samples": 8,
+      "evidence_candidates": 1,
+      "games": 100,
+      "delta_mean": 16.7,
+      "delta_ci95": [
+        7.376625130914507,
+        26.023374869085494
+      ],
+      "rollout_win_rate": 0.59,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.0001935786250487581,
+        "p95": 0.0008103000000119209
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 0.12085508462495455,
+        "p95": 0.5105870000006689
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "heuristic",
+      "profile": "heuristic",
+      "samples": 8,
+      "evidence_candidates": 4,
+      "games": 100,
+      "delta_mean": 16.8,
+      "delta_ci95": [
+        7.014344235184096,
+        26.585655764815904
+      ],
+      "rollout_win_rate": 0.58,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.0002250750000030166,
+        "p95": 0.0008960000013757963
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 0.24610719462502856,
+        "p95": 0.7100545000030252
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "heuristic",
+      "profile": "heuristic",
+      "samples": 32,
+      "evidence_candidates": 1,
+      "games": 100,
+      "delta_mean": 17.5,
+      "delta_ci95": [
+        7.752108231038163,
+        27.247891768961836
+      ],
+      "rollout_win_rate": 0.62,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.000267133375064077,
+        "p95": 0.0009841999999480322
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 0.6199972956250122,
+        "p95": 2.6446389999982785
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "heuristic",
+      "profile": "heuristic",
+      "samples": 32,
+      "evidence_candidates": 4,
+      "games": 100,
+      "delta_mean": 18.6,
+      "delta_ci95": [
+        9.482993544640287,
+        27.717006455359716
+      ],
+      "rollout_win_rate": 0.66,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.00023724575002688651,
+        "p95": 0.0009241999978257809
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 1.050087083624967,
+        "p95": 3.0919336000006297
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "heuristic",
+      "profile": "heuristic",
+      "samples": 128,
+      "evidence_candidates": 1,
+      "games": 100,
+      "delta_mean": 18.5,
+      "delta_ci95": [
+        9.055383126945388,
+        27.944616873054613
+      ],
+      "rollout_win_rate": 0.63,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.0002440616250396488,
+        "p95": 0.0010282000002916902
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 2.4438585594999633,
+        "p95": 9.98831269999937
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "heuristic",
+      "profile": "heuristic",
+      "samples": 128,
+      "evidence_candidates": 4,
+      "games": 100,
+      "delta_mean": 19.8,
+      "delta_ci95": [
+        10.527017665619255,
+        29.072982334380747
+      ],
+      "rollout_win_rate": 0.66,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.0001833056249506626,
+        "p95": 0.0007302000012714416
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 3.227871493625071,
+        "p95": 9.740551200000482
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "heuristic",
+      "profile": "mixed",
+      "samples": 8,
+      "evidence_candidates": 1,
+      "games": 100,
+      "delta_mean": 15.0,
+      "delta_ci95": [
+        6.589306469941635,
+        23.410693530058367
+      ],
+      "rollout_win_rate": 0.59,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.000179214749964558,
+        "p95": 0.0007618999989063013
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 0.09698307075002958,
+        "p95": 0.3752677999982552
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "heuristic",
+      "profile": "mixed",
+      "samples": 8,
+      "evidence_candidates": 4,
+      "games": 100,
+      "delta_mean": 17.7,
+      "delta_ci95": [
+        7.986083534901637,
+        27.41391646509836
+      ],
+      "rollout_win_rate": 0.61,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.00017704150009649312,
+        "p95": 0.0007272999973793048
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 0.18325154837498303,
+        "p95": 0.5156970000025467
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "heuristic",
+      "profile": "mixed",
+      "samples": 32,
+      "evidence_candidates": 1,
+      "games": 100,
+      "delta_mean": 12.5,
+      "delta_ci95": [
+        2.9248108914420676,
+        22.075189108557932
+      ],
+      "rollout_win_rate": 0.58,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.00017798325002331693,
+        "p95": 0.0007525000000896398
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 0.38773264750003816,
+        "p95": 1.6346066000005521
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "heuristic",
+      "profile": "mixed",
+      "samples": 32,
+      "evidence_candidates": 4,
+      "games": 100,
+      "delta_mean": 20.5,
+      "delta_ci95": [
+        11.04306539510756,
+        29.95693460489244
+      ],
+      "rollout_win_rate": 0.65,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.00017794862493701656,
+        "p95": 0.0007490000025427435
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 0.7294949906250349,
+        "p95": 2.04769849999866
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "heuristic",
+      "profile": "mixed",
+      "samples": 128,
+      "evidence_candidates": 1,
+      "games": 100,
+      "delta_mean": 17.7,
+      "delta_ci95": [
+        8.151270148455461,
+        27.24872985154454
+      ],
+      "rollout_win_rate": 0.61,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.00017881587510601093,
+        "p95": 0.0007493000011891127
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 1.5498963054999513,
+        "p95": 6.092112000002089
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    },
+    {
+      "opponents": "heuristic",
+      "profile": "mixed",
+      "samples": 128,
+      "evidence_candidates": 4,
+      "games": 100,
+      "delta_mean": 22.4,
+      "delta_ci95": [
+        12.358973661054666,
+        32.441026338945335
+      ],
+      "rollout_win_rate": 0.67,
+      "baseline_decision_latency_seconds": {
+        "mean": 0.00017724874988743976,
+        "p95": 0.000736400001187576
+      },
+      "rollout_decision_latency_seconds": {
+        "mean": 2.9248802225000916,
+        "p95": 8.249624500000209
+      },
+      "baseline_decisions": 800,
+      "rollout_decisions": 800
+    }
+  ]
+}

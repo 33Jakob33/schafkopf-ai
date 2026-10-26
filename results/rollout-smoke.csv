@@ -1,0 +1,5 @@
+seed,case_id,opponents,profile,samples,evidence_candidates,evidence_agreement,baseline_payment,rollout_payment,delta,baseline_decisions,rollout_decisions,baseline_seconds,rollout_seconds
+20261020,0,random,heuristic,8,1,0.7,30,30,0,8,8,0.0020467000031203497,1.6397797999998147
+20261020,1,random,heuristic,8,1,0.7,30,30,0,8,8,0.0013345999977900647,1.1785976999981358
+20261020,0,heuristic,heuristic,8,1,0.7,20,20,0,8,8,0.0021630999999615597,1.8505005999977584
+20261020,1,heuristic,heuristic,8,1,0.7,-20,-20,0,8,8,0.000800499998149462,0.40484139999898616

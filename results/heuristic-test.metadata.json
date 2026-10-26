@@ -1,0 +1,10 @@
+{
+  "benchmark_sha256": "be91f430d4f76115d57122bae1b2cdb93abb557105afd891113d8f9cc607b41f",
+  "agent_id": "heuristic",
+  "agent_type": "heuristic",
+  "checkpoint": null,
+  "factory": null,
+  "games": 100,
+  "timestamp_utc": "2026-10-20T15:20:06.764252+00:00",
+  "results": "results\\heuristic-test.csv"
+}

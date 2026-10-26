@@ -1,0 +1,42 @@
+{
+  "protocol_sha256": "2c4264e5a48d0e3c7ccf4bd1d6d76a5ce5a2736d89d743bbe41affcf4341cf64",
+  "seed": 20261119,
+  "results": {
+    "fast-h8-e1": {
+      "games": 1000,
+      "mean_delta": 7.65,
+      "paired_ci95": [
+        4.861696738322914,
+        10.438303261677087
+      ],
+      "baseline_win_rate": 0.543,
+      "rollout_win_rate": 0.606,
+      "rollout_seconds_total": 1071.9026926000251,
+      "mean_seconds_per_card_decision": 0.13398783657500316
+    },
+    "balanced-m32-e4": {
+      "games": 1000,
+      "mean_delta": 12.2,
+      "paired_ci95": [
+        9.113239415356787,
+        15.286760584643211
+      ],
+      "baseline_win_rate": 0.543,
+      "rollout_win_rate": 0.651,
+      "rollout_seconds_total": 6818.810318099924,
+      "mean_seconds_per_card_decision": 0.8523512897624905
+    },
+    "best-m128-e4": {
+      "games": 1000,
+      "mean_delta": 13.44,
+      "paired_ci95": [
+        10.390711906014761,
+        16.489288093985238
+      ],
+      "baseline_win_rate": 0.543,
+      "rollout_win_rate": 0.673,
+      "rollout_seconds_total": 27427.117623399972,
+      "mean_seconds_per_card_decision": 3.4283897029249966
+    }
+  }
+}

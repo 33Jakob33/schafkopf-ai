@@ -1,0 +1,14 @@
+{
+  "sha256": "2c4264e5a48d0e3c7ccf4bd1d6d76a5ce5a2736d89d743bbe41affcf4341cf64",
+  "version": 1,
+  "seed": 20261119,
+  "games": 1000,
+  "opponents": "heuristic",
+  "bidding_profile": "baseline",
+  "selected_variants": [
+    "fast-h8-e1",
+    "balanced-m32-e4",
+    "best-m128-e4"
+  ],
+  "evidence_agreement": 0.7
+}
