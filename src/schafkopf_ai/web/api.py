@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from schafkopf_ai.game.deck import Deck
 from schafkopf_ai.game.game_type import GameType
+from schafkopf_ai.web.sessions import AGENT_KINDS, new_session, play, sessions
 
 app = FastAPI(title="Schafkopf AI API", version="0.1.0")
 
@@ -18,7 +19,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in origins.split(",") if origin.strip()],
     allow_credentials=False,
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -51,5 +52,44 @@ def engine_info() -> EngineInfoResponse:
         cards_per_player=8,
         deck_size=len(Deck().cards),
         game_types=[game_type.value for game_type in GameType],
-        available_agents=["random", "heuristic"],
+        available_agents=list(AGENT_KINDS),
     )
+
+
+class NewGameRequest(BaseModel):
+    opponents: list[str]
+    seed: int | None = None
+
+
+class PlayRequest(BaseModel):
+    action_id: str | None = None
+    card: str | None = None
+
+
+@app.post("/api/games")
+def create_game(body: NewGameRequest) -> dict:
+    try:
+        _, view = new_session(body.opponents, body.seed)
+        return view
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/api/games/{session_id}")
+def get_game(session_id: str) -> dict:
+    session = sessions.get(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Game not found")
+    return session.view(session_id)
+
+
+@app.post("/api/games/{session_id}/actions")
+def submit_action(session_id: str, body: PlayRequest) -> dict:
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Game not found")
+    try:
+        return play(session_id, body.action_id, body.card)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
