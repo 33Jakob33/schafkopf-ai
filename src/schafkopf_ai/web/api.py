@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from schafkopf_ai.game.deck import Deck
 from schafkopf_ai.game.game_type import GameType
-from schafkopf_ai.web.sessions import AGENT_KINDS, new_session, play, sessions
+from schafkopf_ai.web.sessions import AGENT_KINDS, advance_one, new_session, play, sessions
 
 app = FastAPI(title="Schafkopf AI API", version="0.1.0")
 
@@ -93,3 +93,10 @@ def submit_action(session_id: str, body: PlayRequest) -> dict:
         return play(session_id, body.action_id, body.card)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/games/{session_id}/advance")
+def advance_game(session_id: str) -> dict:
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Game not found")
+    return advance_one(session_id)
