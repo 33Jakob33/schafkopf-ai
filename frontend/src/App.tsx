@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { api, type Card, type GameView, type TrickPlay } from "./api";
+import { api, type Card, type EngineInfo, type GameView, type TrickPlay } from "./api";
 
 const SUITS = ["Eichel", "Gras", "Herz", "Schellen"];
 const RANKS = ["Ass", "König", "Ober", "Unter", "10", "9", "8", "7"];
-const OPTIONS = [
-  { id: "heuristic", label: "Heuristic" },
-  { id: "random", label: "Random" },
-  { id: "rollout", label: "Rollout (8 Samples)" },
+const FALLBACK_MODELS: EngineInfo["agent_catalog"] = [
+  { id: "heuristic", label: "Heuristic", available: true, reason: "" },
+  { id: "random", label: "Random", available: true, reason: "" },
+  { id: "rollout", label: "Rollout (8)", available: true, reason: "" },
 ];
 
 function PlayingCard({ card, clickable, onClick, small = false }: {
@@ -51,13 +51,13 @@ function TrickCards({ plays }: { plays: TrickPlay[] }) {
 export default function App() {
   const [opponents, setOpponents] = useState(["heuristic", "heuristic", "heuristic"]);
   const [game, setGame] = useState<GameView | null>(null);
-  const [available, setAvailable] = useState<string[]>(["heuristic", "random", "rollout"]);
+  const [catalog, setCatalog] = useState<EngineInfo["agent_catalog"]>(FALLBACK_MODELS);
   const [loading, setLoading] = useState(false);
   const [recentTrick, setRecentTrick] = useState<TrickPlay[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void api.engine().then(info => setAvailable(info.available_agents))
+    void api.engine().then(info => setCatalog(info.agent_catalog))
       .catch(() => setError("Backend nicht erreichbar. Bitte FastAPI starten."));
   }, []);
 
@@ -115,8 +115,24 @@ export default function App() {
   function opponent(index: number, cls: string) {
     const player = game?.players[index];
     return <div className={`opponent opponent--${cls}`}>
-      <strong>{player?.name ?? `Gegner ${index}`}</strong>
-      <span>{player ? `${player.points} Augen` : opponents[index - 1]}</span>
+      <strong>Gegner {index}</strong>
+      <label className="opponent-model">
+        <span className="sr-only">KI für Gegner {index}</span>
+        <select
+          aria-label={`Modell für Gegner ${index}`}
+          value={opponents[index - 1]}
+          disabled={loading}
+          onChange={event => setOpponents(previous => previous.map(
+            (value, position) => position === index - 1 ? event.target.value : value
+          ))}
+        >
+          {catalog.map(model => <option key={model.id} value={model.id}
+            disabled={!model.available} title={model.reason}>
+            {model.label}{model.available ? "" : " (Checkpoint fehlt)"}
+          </option>)}
+        </select>
+      </label>
+      <span>{player ? `${player.points} Augen` : "8 Karten"}</span>
       <BackCards count={player?.cards ?? 8} />
     </div>;
   }
@@ -127,24 +143,10 @@ export default function App() {
       <span className="subtitle">Bairisches Kartenspiel</span>
     </header>
 
-    <section className="settings">
-      <div className="settings-heading">Gegner auswählen</div>
-      <div className="model-controls">
-        {opponents.map((kind, i) => (
-          <label key={i}>
-            Gegner {i + 1}
-            <select value={kind} disabled={loading}
-              onChange={e => setOpponents(prev => prev.map((v, j) => j === i ? e.target.value : v))}>
-              {OPTIONS.filter(o => available.includes(o.id)).map(o =>
-                <option key={o.id} value={o.id}>{o.label}</option>)}
-            </select>
-          </label>
-        ))}
-        <button type="button" disabled={loading} onClick={() => void start()}>
-          {game ? "Neue Runde" : "Spiel starten"}
-        </button>
-      </div>
-      {game && <p className="hint">Die Modellauswahl gilt beim Start einer neuen Runde.</p>}
+    <section className="settings settings--compact">
+      <button className="new-game-button" type="button" disabled={loading}
+        onClick={() => void start()}>{game ? "Neue Runde" : "Spiel starten"}</button>
+      <span className="hint">Wähle die KI direkt bei jedem Gegner. Änderungen gelten ab der nächsten Runde.</span>
     </section>
 
     <section className="table-area">
