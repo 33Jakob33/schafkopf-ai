@@ -1,62 +1,67 @@
-# Web frontend: development setup
+# Schafkopf AI web table
 
-The web interface lives on `feature/web-frontend`, branched from `main`.
+Playable local prototype on `feature/web-frontend`. Three independently
+configurable opponents and one human player. The actual Python Schafkopf
+bidding, legal moves and settlement drive the interface; it does not simulate
+the rules in React.
 
-## Requirements
+## Start
 
-- Python 3.12+ and [uv](https://docs.astral.sh/uv/)
-- Node.js 20+ and npm (Node 22 LTS recommended)
-
-## Terminal 1: API (repository root)
-
-FastAPI and Uvicorn are **optional** dependencies. For now, `uv --with`
-installs them into uv's execution environment without modifying the existing
-Python ML dependency lockfile.
+Terminal 1, repository root:
 
 ```powershell
-uv sync
 uv run --with fastapi --with uvicorn uvicorn schafkopf_ai.web.api:app --reload
 ```
 
-API: http://127.0.0.1:8000/api/health
-
-Interactive OpenAPI documentation: http://127.0.0.1:8000/docs
-
-## Terminal 2: React (repository root)
+Terminal 2:
 
 ```powershell
 cd frontend
-npm install
-npm run dev
+npm.cmd install
+npm.cmd run dev
 ```
 
-Frontend: http://localhost:5173
+Visit http://localhost:5173. Select the three agents and click **Spiel
+starten**. Choose legal bidding actions, then highlighted playable cards.
+The API automatically makes each opponent's moves until the human must act
+again. At game end, the table displays each player's settlement.
 
-Vite proxies browser `/api` requests to FastAPI on port 8000. A CORS
-allowlist is also configured for local development. This app currently
-reads only engine metadata; game sessions and card-play API endpoints
-will be added in the next phase.
+## Available opponents
 
-## Verification
+- `heuristic`: rule-based HeuristicAgent
+- `random`: RandomAgent
+- `rollout`: RolloutCardPlayAgent with 8 samples per action (may block an
+  API request for a noticeable time)
+
+Trained BC, DAgger, PPO, Q and specialist agents are **not** wired into this
+frontend yet; they require loading model checkpoints and providing safe
+configuration. The selector intentionally lists only working choices.
+
+## API
+
+- `GET /api/health`
+- `GET /api/engine`
+- `POST /api/games` with `{"opponents":["heuristic","random","rollout"]}`
+- `GET /api/games/{id}`
+- `POST /api/games/{id}/actions` with `{"action_id":"0"}` during
+  bidding or `{"card":"HERZ:ACE"}` during card play.
+
+The action IDs and card IDs are supplied by the server's current observation;
+the server validates legal actions. The UI never receives opponent hands.
+
+## Testing
 
 ```powershell
-uv run --with fastapi --with httpx pytest tests/test_web_api.py
+uv run --with fastapi --with httpx pytest tests/test_web_api.py tests/test_web_game.py
 cd frontend
-npm run typecheck
-npm run build
+npm.cmd run typecheck
+npm.cmd run build
 ```
 
-`uv run pytest` without FastAPI installed will not be able to import
-`tests/test_web_api.py`. Use `uv run --with fastapi --with httpx pytest`
-for the **entire** Python suite, or install the optional web dependencies.
-
-## Architecture
-
-- `src/schafkopf_ai/web/api.py`: optional Python/FastAPI HTTP layer
-- `frontend/src/api.ts`: typed fetch client
-- `frontend/src/App.tsx`: API status and engine metadata
-- `frontend/vite.config.ts`: Vite development proxy
-
-Only metadata is transferred in this first milestone. When adding game
-sessions, return **player-scoped observations**, never full `GameState`
-objects or opponent hands.
+Development limitations: sessions are stored **in memory**, reset on API
+restart, and are not durable or suitable for public hosting. The code is a
+single-user local prototype; multiplayer, authentication, rate limiting,
+persistent match history, and production-grade session isolation are not
+implemented. Moves run synchronously; rollout models can be slow. The cards
+use a **stylized Bavarian-suit representation** (Eichel, Gras, Herz, Schellen),
+not licensed scans of a traditional Bavarian deck.
