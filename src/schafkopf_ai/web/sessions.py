@@ -15,6 +15,8 @@ from schafkopf_ai.evaluation.paired import EvaluationAgentSpec, load_evaluation_
 from schafkopf_ai.agents.agent import Agent
 from schafkopf_ai.agents.heuristic_agent import HeuristicAgent
 from schafkopf_ai.agents.random_agent import RandomAgent
+from schafkopf_ai.agents.strategic_heuristic_agent import StrategicHeuristicAgent
+from schafkopf_ai.agents.heuristic_bidding_random_card_agent import HeuristicBiddingRandomCardAgent
 from schafkopf_ai.agents.rollout_card_play_agent import RolloutCardPlayAgent
 from schafkopf_ai.game.bidding import BiddingAction, BiddingState
 from schafkopf_ai.game.card import Card
@@ -35,7 +37,8 @@ MODEL_PATHS = {
     "specialist": Path("models/behavior_cloning/specialists_v2/specialists.json"),
 }
 AGENT_LABELS = {
-    "heuristic": "Heuristic", "random": "Random",
+    "heuristic": "Heuristic", "strategic": "Strategic Heuristic",
+    "heuristic-bid-random": "Heuristic Bid / Random Play", "random": "Random",
     "rollout": "Rollout (8)", "bc": "Behavior Cloning",
     "dagger": "DAgger", "ppo": "PPO", "q": "Q / Action Value",
     "multihead": "Multi-Head", "specialist": "Specialists",
@@ -63,6 +66,10 @@ MAX_SESSIONS = 100
 def make_agent(kind: str, seed: int) -> Agent:
     if kind == "heuristic":
         return HeuristicAgent()
+    if kind == "strategic":
+        return StrategicHeuristicAgent()
+    if kind == "heuristic-bid-random":
+        return HeuristicBiddingRandomCardAgent(rng=random.Random(seed))
     if kind == "random":
         return RandomAgent(rng=random.Random(seed))
     if kind == "rollout":
