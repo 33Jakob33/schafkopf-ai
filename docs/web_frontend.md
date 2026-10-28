@@ -65,3 +65,19 @@ persistent match history, and production-grade session isolation are not
 implemented. Moves run synchronously; rollout models can be slow. The cards
 use a **stylized Bavarian-suit representation** (Eichel, Gras, Herz, Schellen),
 not licensed scans of a traditional Bavarian deck.
+
+
+## Bavarian card artwork and visible AI turns
+
+The frontend expects the user-supplied 4-row by 8-column Bavarian card-sheet
+at `frontend/public/bavarian-deck.jpg`. The artwork is **not committed**;
+copy the original image into that location before starting Vite.
+
+Rows must be Eichel, Gras, Herz, Schellen, with columns Ass, König, Ober,
+Unter, 10, 9, 8, 7 (as in the supplied image). The CSS sprite uses positions
+from that exact 1110 × 694 image; unrelated image dimensions/layouts will
+not align.
+
+The client calls `POST /api/games/{id}/advance` to advance **one AI action**
+at a time. This makes betting announcements and opponent card plays visible.
+The API remains authoritative; the browser cannot inspect hidden hands.
