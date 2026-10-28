@@ -8,6 +8,9 @@ from __future__ import annotations
 import random
 import secrets
 from dataclasses import dataclass
+from pathlib import Path
+
+from schafkopf_ai.evaluation.paired import EvaluationAgentSpec, load_evaluation_agent
 
 from schafkopf_ai.agents.agent import Agent
 from schafkopf_ai.agents.heuristic_agent import HeuristicAgent
@@ -21,7 +24,38 @@ from schafkopf_ai.game.game_result import result_from_game_state
 from schafkopf_ai.game.rules import RAMSCH_RULES
 from schafkopf_ai.game.settlement import settlement_from_game_state
 
-AGENT_KINDS = ("heuristic", "random", "rollout")
+# Checkpoints are generated locally, not stored in Git.
+# Paths follow the existing trainer defaults.
+MODEL_PATHS = {
+    "bc": Path("models/behavior_cloning/card_play_mlp.pt"),
+    "dagger": Path("models/behavior_cloning/card_play_dagger.pt"),
+    "ppo": Path("models/ppo/card_play_ppo_best.pt"),
+    "q": Path("models/action_values/card_play_q_v2.pt"),
+    "multihead": Path("models/behavior_cloning/card_play_multihead_v2.pt"),
+    "specialist": Path("models/behavior_cloning/specialists_v2/manifest.json"),
+}
+AGENT_LABELS = {
+    "heuristic": "Heuristic", "random": "Random",
+    "rollout": "Rollout (8)", "bc": "Behavior Cloning",
+    "dagger": "DAgger", "ppo": "PPO", "q": "Q / Action Value",
+    "multihead": "Multi-Head", "specialist": "Specialists",
+}
+AGENT_KINDS = tuple(AGENT_LABELS)
+
+
+def model_catalog() -> list[dict[str, str | bool]]:
+    return [
+        {
+            "id": kind, "label": label,
+            "available": kind not in MODEL_PATHS or MODEL_PATHS[kind].is_file(),
+            "reason": (
+                "" if kind not in MODEL_PATHS or MODEL_PATHS[kind].is_file()
+                else f"Checkpoint fehlt: {MODEL_PATHS[kind]}"
+            ),
+        }
+        for kind, label in AGENT_LABELS.items()
+    ]
+
 HUMAN = 0
 MAX_SESSIONS = 100
 
@@ -33,6 +67,14 @@ def make_agent(kind: str, seed: int) -> Agent:
         return RandomAgent(rng=random.Random(seed))
     if kind == "rollout":
         return RolloutCardPlayAgent(samples_per_action=8, seed=seed)
+    if kind in MODEL_PATHS:
+        checkpoint = MODEL_PATHS[kind]
+        if not checkpoint.is_file():
+            raise ValueError(f"Checkpoint fehlt für {kind}: {checkpoint}")
+        return load_evaluation_agent(
+            EvaluationAgentSpec(kind=kind, name=kind, checkpoint=checkpoint),
+            device="cpu",
+        )
     raise ValueError(f"Unknown agent kind: {kind}")
 
 
