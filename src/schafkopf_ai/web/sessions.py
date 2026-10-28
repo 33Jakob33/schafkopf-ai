@@ -32,7 +32,7 @@ MODEL_PATHS = {
     "ppo": Path("models/ppo/card_play_ppo_best.pt"),
     "q": Path("models/action_values/card_play_q_v2.pt"),
     "multihead": Path("models/behavior_cloning/card_play_multihead_v2.pt"),
-    "specialist": Path("models/behavior_cloning/specialists_v2/manifest.json"),
+    "specialist": Path("models/behavior_cloning/specialists_v2/specialists.json"),
 }
 AGENT_LABELS = {
     "heuristic": "Heuristic", "random": "Random",
