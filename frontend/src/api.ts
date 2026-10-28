@@ -32,6 +32,7 @@ export interface EngineInfo {
   cards_per_player: number;
   game_types: string[];
   available_agents: string[];
+  agent_catalog: { id: string; label: string; available: boolean; reason: string }[];
 }
 async function request<T>(url: string, method = "GET", body?: unknown): Promise<T> {
   const response = await fetch(url, {
