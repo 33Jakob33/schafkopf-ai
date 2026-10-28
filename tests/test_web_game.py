@@ -18,9 +18,14 @@ def test_game_can_be_played_to_settlement() -> None:
     game = response.json()
     assert len(game["hand"]) == 8
     assert all("hand" not in opponent for opponent in game["players"])
-    for _ in range(60):
+    for _ in range(160):
         if game["phase"] == "finished":
             break
+        if game["current_player"] != 0:
+            response = client.post(f"/api/games/{game['id']}/advance")
+            assert response.status_code == 200, response.text
+            game = response.json()
+            continue
         if game["phase"] == "bidding":
             assert game["bidding_actions"]
             action = {"action_id": game["bidding_actions"][0]["id"]}
