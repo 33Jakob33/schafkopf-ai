@@ -23,6 +23,7 @@ export interface GameView {
   trick_number: number;
   redeals: number;
   bidding_history: { player: number; action: string }[];
+  announcement: string | null;
 }
 export interface EngineInfo {
   name: string;
@@ -49,6 +50,7 @@ async function request<T>(url: string, method = "GET", body?: unknown): Promise<
 export const api = {
   engine: () => request<EngineInfo>("/api/engine"),
   newGame: (opponents: string[]) => request<GameView>("/api/games", "POST", { opponents }),
+  advance: (id: string) => request<GameView>(`/api/games/${encodeURIComponent(id)}/advance`, "POST"),
   act: (id: string, action: { card?: string; action_id?: string }) =>
     request<GameView>(`/api/games/${encodeURIComponent(id)}/actions`, "POST", action),
 };
