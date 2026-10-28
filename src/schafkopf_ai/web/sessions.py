@@ -118,7 +118,8 @@ class Session:
             self.state.play_card(player, chosen)
             self.announcement = f'{self.names[player]} spielt {chosen}'
             self._capture_trick()
-        raise RuntimeError("Auto-play exceeded safe action limit")
+        if max_actions >= 500:
+            raise RuntimeError("Auto-play exceeded safe action limit")
 
     def _capture_trick(self) -> None:
         if self.state is None:
@@ -232,6 +233,7 @@ def play(session_id: str, action_id: str | None, card: str | None) -> dict:
         except (ValueError, IndexError) as exc:
             raise ValueError("Invalid bidding action") from exc
         session.bidding.apply_action(HUMAN, action)
+        session.announcement = f"Du: {action_label(action)}"
     else:
         if session.state.is_complete:
             raise ValueError("Game already complete")
@@ -242,6 +244,7 @@ def play(session_id: str, action_id: str | None, card: str | None) -> dict:
         if selected is None:
             raise ValueError("Card is not legal")
         session.state.play_card(HUMAN, selected)
+        session.announcement = f"Du spielst {selected}"
         session._capture_trick()
     session.advance(max_actions=1)
     return session.view(session_id)
