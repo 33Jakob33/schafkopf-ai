@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from schafkopf_ai.game.deck import Deck
 from schafkopf_ai.game.game_type import GameType
-from schafkopf_ai.web.sessions import AGENT_KINDS, advance_one, new_session, play, sessions
+from schafkopf_ai.web.sessions import AGENT_KINDS, advance_one, model_catalog, new_session, play, sessions
 
 app = FastAPI(title="Schafkopf AI API", version="0.1.0")
 
@@ -36,6 +36,7 @@ class EngineInfoResponse(BaseModel):
     deck_size: int
     game_types: list[str]
     available_agents: list[str]
+    agent_catalog: list[dict[str, str | bool]]
 
 
 @app.get("/api/health", response_model=HealthResponse)
@@ -52,7 +53,8 @@ def engine_info() -> EngineInfoResponse:
         cards_per_player=8,
         deck_size=len(Deck().cards),
         game_types=[game_type.value for game_type in GameType],
-        available_agents=list(AGENT_KINDS),
+        available_agents=[str(item["id"]) for item in model_catalog() if item["available"]],
+        agent_catalog=model_catalog(),
     )
 
 
