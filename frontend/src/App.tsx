@@ -1,12 +1,8 @@
 import { useEffect, useState } from "react";
 import { api, type Card, type GameView, type TrickPlay } from "./api";
 
-const SUITS: Record<string, string> = {
-  Eichel: "♣", Gras: "♠", Herz: "♥", Schellen: "◆",
-};
-const RANKS: Record<string, string> = {
-  Ass: "A", König: "K", Ober: "O", Unter: "U",
-};
+const SUITS = ["Eichel", "Gras", "Herz", "Schellen"];
+const RANKS = ["Ass", "König", "Ober", "Unter", "10", "9", "8", "7"];
 const OPTIONS = [
   { id: "heuristic", label: "Heuristic" },
   { id: "random", label: "Random" },
@@ -16,18 +12,22 @@ const OPTIONS = [
 function PlayingCard({ card, clickable, onClick, small = false }: {
   card: Card; clickable?: boolean; onClick?: () => void; small?: boolean;
 }) {
+  const column = RANKS.indexOf(card.rank);
+  const row = SUITS.indexOf(card.suit);
+  const spriteStyle = {
+    backgroundPosition: `-${228 + column * 83}px -${67 + row * 142}px`,
+  };
   return (
     <button
       type="button"
-      className={`playing-card ${small ? "playing-card--small" : ""} ${clickable ? "playing-card--legal" : ""} ${card.suit === "Herz" || card.suit === "Schellen" ? "playing-card--red" : ""}`}
-      onClick={onClick}
-      disabled={!clickable}
-      title={`${card.suit} ${card.rank}`}
-      aria-label={`${card.suit} ${card.rank}`}
+      className={`playing-card playing-card--illustrated ${small ? "playing-card--small" : ""} ${clickable ? "playing-card--legal" : ""}`}
+      onClick={onClick} disabled={!clickable}
+      title={`${card.suit} ${card.rank}`} aria-label={`${card.suit} ${card.rank}`}
     >
-      <span className="card-rank">{RANKS[card.rank] ?? card.rank}</span>
-      <span className="card-symbol">{SUITS[card.suit] ?? "?"}</span>
-      <span className="card-suit-name">{card.suit}</span>
+      <span className="card-art-frame">
+        <span className="card-art" style={spriteStyle} />
+      </span>
+      <span className="card-fallback">{card.suit} {card.rank}</span>
     </button>
   );
 }
@@ -53,6 +53,7 @@ export default function App() {
   const [game, setGame] = useState<GameView | null>(null);
   const [available, setAvailable] = useState<string[]>(["heuristic", "random", "rollout"]);
   const [loading, setLoading] = useState(false);
+  const [recentTrick, setRecentTrick] = useState<TrickPlay[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -81,6 +82,30 @@ export default function App() {
       setError(err instanceof Error ? err.message : "Aktion fehlgeschlagen");
     } finally { setLoading(false); }
   }
+
+  // Advance exactly one AI action at a time: React can animate every card
+  // and display every bidding announcement before the next action.
+  useEffect(() => {
+    if (!game || loading || game.phase === "finished" || game.current_player === 0) return;
+    const timer = window.setTimeout(async () => {
+      setLoading(true);
+      try { setGame(await api.advance(game.id)); }
+      catch (err) { setError(err instanceof Error ? err.message : "KI-Zug fehlgeschlagen"); }
+      finally { setLoading(false); }
+    }, recentTrick ? 1100 : 800);
+    return () => window.clearTimeout(timer);
+  }, [game, loading, recentTrick]);
+
+  useEffect(() => {
+    if (!game?.last_trick.length || game.phase === "bidding") return;
+    // Show the completed trick briefly even after the backend has started
+    // the next trick. The completed trick remains available separately.
+    if (game.trick.length === 0 && game.phase === "playing" && game.trick_number > 1) {
+      setRecentTrick(game.last_trick);
+      const timer = window.setTimeout(() => setRecentTrick(null), 900);
+      return () => window.clearTimeout(timer);
+    }
+  }, [game?.trick_number, game?.phase]);
 
   const contract = game?.contract;
   const contractLabel = contract
@@ -130,8 +155,9 @@ export default function App() {
       {opponent(2, "top")}
       {opponent(1, "left")}
       {opponent(3, "right")}
+      {game?.announcement && <div className="table-announcement" role="status" key={game.announcement + game.trick_number}>{game.announcement}</div>}
       <div className="table-center">
-        {game?.trick.length ? <TrickCards plays={game.trick} /> : (
+        {(recentTrick || game?.trick)?.length ? <TrickCards plays={recentTrick || game!.trick} /> : (
           <div className="table-message">
             {game?.phase === "bidding" ? "Es wird geboten" : game?.phase === "finished" ? "Runde beendet" : "Schafkopf"}
           </div>
@@ -156,7 +182,7 @@ export default function App() {
       </div>
       <p className="hint">{game.bidding_actions.length ? "Du bist an der Reihe." : "Die Gegner bieten …"}</p>
     </section>}
-    {game?.phase === "playing" && <p className="turn-hint">{loading ? "Gegner denken …" : game.current_player === 0 ? "Du bist dran: Wähle eine hervorgehobene Karte." : "Gegner sind am Zug."}</p>}
+    {game?.phase === "playing" && <p className="turn-hint">{game.current_player === 0 ? "Du bist dran: Wähle eine hervorgehobene Karte." : "Die Gegner spielen …"}</p>}
     {game?.phase === "finished" && <section className="action-panel">
       <h2>Abrechnung</h2>
       <div className="payments">{game.payments?.map((value, i) =>
