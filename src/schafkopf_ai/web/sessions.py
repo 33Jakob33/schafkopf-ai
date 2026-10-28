@@ -66,10 +66,11 @@ class Session:
     names: tuple[str, str, str, str]
     redeals: int = 0
     last_trick: list[dict] | None = None
+    announcement: str | None = None
 
-    def advance(self) -> None:
+    def advance(self, max_actions: int = 500) -> None:
         """Run automatic agents only until the next human action/end."""
-        for _ in range(500):
+        for _ in range(max_actions):
             if self.state is None:
                 if self.bidding.is_complete:
                     result = self.bidding.result()
@@ -86,6 +87,7 @@ class Session:
                         continue
                     if result.contract is None:
                         raise RuntimeError("No contract after bidding")
+                    self.announcement = f'Gespielt wird: {action_label(BiddingAction.announce(result.contract))}'
                     self.state = GameState.from_hands(
                         self.bidding.hands, contract=result.contract, starting_player=0,
                     )
@@ -100,6 +102,7 @@ class Session:
                     self.bidding.observation_for(player), legal
                 )
                 self.bidding.apply_action(player, action)
+                self.announcement = f'{self.names[player]}: {action_label(action)}'
                 continue
             if self.state.is_complete or self.state.current_player == HUMAN:
                 return
@@ -113,6 +116,7 @@ class Session:
             if chosen not in cards:
                 raise RuntimeError(f"Agent {player} returned illegal card")
             self.state.play_card(player, chosen)
+            self.announcement = f'{self.names[player]} spielt {chosen}'
             self._capture_trick()
         raise RuntimeError("Auto-play exceeded safe action limit")
 
@@ -142,7 +146,8 @@ class Session:
                 "trick": [], "last_trick": self.last_trick or [],
                 "contract": None, "payments": None,
                 "trick_number": 0, "redeals": self.redeals,
-                "bidding_history": [
+                "announcement": self.announcement,
+            "bidding_history": [
                     {"player": event.player_index, "action": action_label(event.action)}
                     for event in self.bidding.history
                 ],
@@ -212,7 +217,7 @@ def new_session(opponents: list[str], seed: int | None = None) -> tuple[str, dic
     )
     session_id = secrets.token_urlsafe(18)
     sessions[session_id] = session
-    session.advance()
+    session.advance(max_actions=1)
     return session_id, session.view(session_id)
 
 
@@ -238,5 +243,15 @@ def play(session_id: str, action_id: str | None, card: str | None) -> dict:
             raise ValueError("Card is not legal")
         session.state.play_card(HUMAN, selected)
         session._capture_trick()
-    session.advance()
+    session.advance(max_actions=1)
+    return session.view(session_id)
+
+
+def advance_one(session_id: str) -> dict:
+    session = sessions[session_id]
+    if session.state is None and session.bidding.current_player == HUMAN:
+        return session.view(session_id)
+    if session.state is not None and (session.state.is_complete or session.state.current_player == HUMAN):
+        return session.view(session_id)
+    session.advance(max_actions=1)
     return session.view(session_id)
