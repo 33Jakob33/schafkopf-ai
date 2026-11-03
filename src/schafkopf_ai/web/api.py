@@ -61,6 +61,7 @@ def engine_info() -> EngineInfoResponse:
 class NewGameRequest(BaseModel):
     opponents: list[str]
     seed: int | None = None
+    analysis: bool = False
 
 
 class PlayRequest(BaseModel):
@@ -71,7 +72,7 @@ class PlayRequest(BaseModel):
 @app.post("/api/games")
 def create_game(body: NewGameRequest) -> dict:
     try:
-        _, view = new_session(body.opponents, body.seed)
+        _, view = new_session(body.opponents, body.seed, body.analysis)
         return view
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
