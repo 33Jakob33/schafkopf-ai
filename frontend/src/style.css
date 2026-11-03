@@ -157,3 +157,6 @@ footer{margin:20px;text-align:center;color:#8f8270;font-size:12px}
 @media(max-width:480px){.model-menu{width:225px}.model-trigger{font-size:10px;padding:6px 4px}
   .human-heading{gap:8px}.hand-sort-actions button{font-size:10px;padding:4px 5px}}
 @media(prefers-reduced-motion:reduce){.hand-card-slot{transition:none}}
+
+/* Override the table's generic light text for the cream model menu. */
+.opponent .model-trigger span,.opponent .model-option span{color:inherit}
