@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import ModelPicker from "./ModelPicker";
+import { moveCard, orderHand, sortHand } from "./handOrder";
 import { api, type Card, type EngineInfo, type GameView, type TrickPlay } from "./api";
 
 const SUITS = ["Eichel", "Gras", "Herz", "Schellen"];
@@ -54,6 +56,8 @@ export default function App() {
   const [catalog, setCatalog] = useState<EngineInfo["agent_catalog"]>(FALLBACK_MODELS);
   const [loading, setLoading] = useState(false);
   const [recentTrick, setRecentTrick] = useState<TrickPlay[] | null>(null);
+  const [handOrder, setHandOrder] = useState<string[]>([]);
+  const [draggedCard, setDraggedCard] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -66,7 +70,11 @@ export default function App() {
     setError(null);
 
     try {
-      setGame(await api.newGame(opponents));
+      const next = await api.newGame(opponents);
+      setHandOrder([]);
+      setDraggedCard(null);
+      setRecentTrick(null);
+      setGame(next);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Spiel konnte nicht gestartet werden");
     } finally { setLoading(false); }
@@ -107,6 +115,14 @@ export default function App() {
     }
   }, [game?.trick_number, game?.phase]);
 
+  const orderedHand = useMemo(() => orderHand(game?.hand ?? [], handOrder), [game?.hand, handOrder]);
+
+  function reorder(sourceId: string, targetId: string) {
+    if (!game || game.phase === "finished") return;
+    const current = orderedHand.map(card => card.id);
+    setHandOrder(moveCard(current, sourceId, targetId));
+  }
+
   const contract = game?.contract;
   const contractLabel = contract
     ? [contract.type, contract.called_suit ?? contract.trump_suit].filter(Boolean).join(" · ")
@@ -116,22 +132,15 @@ export default function App() {
     const player = game?.players[index];
     return <div className={`opponent opponent--${cls}`}>
       <strong>Gegner {index}</strong>
-      <label className="opponent-model">
-        <span className="sr-only">KI für Gegner {index}</span>
-        <select
-          aria-label={`Modell für Gegner ${index}`}
-          value={opponents[index - 1]}
-          disabled={loading}
-          onChange={event => setOpponents(previous => previous.map(
-            (value, position) => position === index - 1 ? event.target.value : value
-          ))}
-        >
-          {catalog.map(model => <option key={model.id} value={model.id}
-            disabled={!model.available} title={model.reason}>
-            {model.label}{model.available ? "" : " (Checkpoint fehlt)"}
-          </option>)}
-        </select>
-      </label>
+      <ModelPicker
+        player={index}
+        models={catalog}
+        value={opponents[index - 1]}
+        disabled={loading}
+        onChange={modelId => setOpponents(previous => previous.map(
+          (value, position) => position === index - 1 ? modelId : value
+        ))}
+      />
       <span>{player ? `${player.points} Augen` : "8 Karten"}</span>
       <BackCards count={player?.cards ?? 8} />
     </div>;
@@ -166,11 +175,40 @@ export default function App() {
         )}
       </div>
       <div className="human">
-        <div className="human-heading"><strong>Du</strong><span>{game?.players[0].points ?? 0} Augen</span></div>
-        <div className="hand">
-          {game?.hand.map(card => <PlayingCard key={card.id} card={card}
-            clickable={!loading && game.phase === "playing" && game.legal_cards.includes(card.id)}
-            onClick={() => void act({ card: card.id })} />)}
+        <div className="human-heading">
+          <strong>Du</strong><span>{game?.players[0].points ?? 0} Augen</span>
+          {game && orderedHand.length > 1 && (
+            <div className="hand-sort-actions" aria-label="Handkarten sortieren">
+              <button type="button" onClick={() => setHandOrder(sortHand(game.hand, "suit"))}>Nach Farbe</button>
+              <button type="button" onClick={() => setHandOrder(sortHand(game.hand, "rank"))}>Nach Wert</button>
+            </div>
+          )}
+        </div>
+        <div className="hand" aria-label="Deine Karten – per Ziehen sortierbar">
+          {orderedHand.map(card => (
+            <div
+              key={card.id}
+              className={`hand-card-slot ${draggedCard === card.id ? "hand-card-slot--dragging" : ""}`}
+              draggable
+              onDragStart={event => {
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData("text/plain", card.id);
+                setDraggedCard(card.id);
+              }}
+              onDragOver={event => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; }}
+              onDrop={event => {
+                event.preventDefault();
+                const source = event.dataTransfer.getData("text/plain") || draggedCard;
+                if (source) reorder(source, card.id);
+                setDraggedCard(null);
+              }}
+              onDragEnd={() => setDraggedCard(null)}
+            >
+              <PlayingCard card={card}
+                clickable={!loading && game?.phase === "playing" && game.legal_cards.includes(card.id)}
+                onClick={() => void act({ card: card.id })} />
+            </div>
+          ))}
           {!game && <span className="empty-hand">Starte eine Runde, um deine Karten zu sehen.</span>}
         </div>
       </div>
