@@ -189,12 +189,6 @@ export default function App() {
             <div
               key={card.id}
               className={`hand-card-slot ${draggedCard === card.id ? "hand-card-slot--dragging" : ""}`}
-              draggable
-              onDragStart={event => {
-                event.dataTransfer.effectAllowed = "move";
-                event.dataTransfer.setData("text/plain", card.id);
-                setDraggedCard(card.id);
-              }}
               onDragOver={event => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; }}
               onDrop={event => {
                 event.preventDefault();
@@ -205,8 +199,22 @@ export default function App() {
               onDragEnd={() => setDraggedCard(null)}
             >
               <PlayingCard card={card}
-                clickable={!loading && game?.phase === "playing" && game.legal_cards.includes(card.id)}
+                clickable={!loading && game?.phase === "playing" &&
+                  game.current_player === 0 && game.legal_cards.includes(card.id)}
                 onClick={() => void act({ card: card.id })} />
+              <span
+                className="card-drag-handle"
+                draggable
+                role="img"
+                aria-label={`${card.suit} ${card.rank} zum Sortieren ziehen`}
+                title="Hier ziehen, um die Karte zu sortieren"
+                onDragStart={event => {
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", card.id);
+                  setDraggedCard(card.id);
+                }}
+                onDragEnd={() => setDraggedCard(null)}
+              >⠿</span>
             </div>
           ))}
           {!game && <span className="empty-hand">Starte eine Runde, um deine Karten zu sehen.</span>}
@@ -222,7 +230,7 @@ export default function App() {
       </div>
       <p className="hint">{game.bidding_actions.length ? "Du bist an der Reihe." : "Die Gegner bieten …"}</p>
     </section>}
-    {game?.phase === "playing" && <p className="turn-hint">{game.current_player === 0 ? "Du bist dran: Wähle eine hervorgehobene Karte." : "Die Gegner spielen …"}</p>}
+    {game?.phase === "playing" && <p className="turn-hint">{game.current_player === 0 ? `Du bist dran: ${game.legal_cards.length} spielbare Karte(n) sind markiert.` : "Die Gegner spielen …"}</p>}
     {game?.phase === "finished" && <section className="action-panel">
       <h2>Abrechnung</h2>
       <div className="payments">{game.payments?.map((value, i) =>
