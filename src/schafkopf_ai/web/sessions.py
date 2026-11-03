@@ -172,21 +172,25 @@ class Session:
         # A separate, public-observation-only 4-sample rollout provides
         # comparable values even if the active model is a heuristic or neural
         # policy without exposed action scores.
-        estimates = MonteCarloActionEvaluator(
-            samples_per_action=4, seed=self.seed + self.step_index * 1009 + 77,
-        ).evaluate(observation, legal_cards) if len(legal_cards) > 1 else ()
-        values = {estimate.card: estimate.mean_payment for estimate in estimates}
-        source = "Vergleichsschätzung: 4 Rollouts je Karte (nicht Modell-intern)"
         agent = self.agents[player]
         native = getattr(agent, "last_action_values", ())
+        q_values = getattr(agent, "last_q_values", ())
         if native:
             values = {entry.card: entry.mean_payment for entry in native}
             source = "Rollout-Modell: erwartete Auszahlung"
-        q_values = getattr(agent, "last_q_values", ())
-        if q_values:
+        elif q_values:
             values = {card: q_values[card_to_action_index(card)]
                       for card in legal_cards}
             source = "Q-Modell: geschätzte Auszahlung"
+        elif len(legal_cards) > 1:
+            estimates = MonteCarloActionEvaluator(
+                samples_per_action=4, seed=self.seed + self.step_index * 1009 + 77,
+            ).evaluate(observation, legal_cards)
+            values = {estimate.card: estimate.mean_payment for estimate in estimates}
+            source = "Vergleichsschätzung: 4 Rollouts je Karte (nicht Modell-intern)"
+        else:
+            values = {}
+            source = "Nur eine legale Karte, keine Bewertung erforderlich"
         sorted_cards = sorted(legal_cards, key=lambda card: values.get(card, float("-inf")), reverse=True)
         ranks = {card: i + 1 for i, card in enumerate(sorted_cards)}
         self.pending_info = {
