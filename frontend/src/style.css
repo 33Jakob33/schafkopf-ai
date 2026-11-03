@@ -176,3 +176,43 @@ footer{margin:20px;text-align:center;color:#8f8270;font-size:12px}
 .card-drag-handle:active{cursor:grabbing}
 .hand-card-slot--dragging{opacity:.5}
 .hand{padding-top:24px}
+
+/* Explainable, manually stepped analysis mode. */
+.mode-button{background:#fffaf0;border:1px solid #3175b6;color:#23598a;border-radius:9px;padding:10px 14px;font-size:13px;font-weight:750}
+.mode-button--active{background:#23598a;color:#fff}
+.analysis-panel{margin-top:16px;border:1px solid #cbb891;border-radius:14px;background:#fffaf1;padding:20px;color:#372b1d}
+.analysis-panel-heading{display:flex;align-items:center;justify-content:space-between;gap:14px}
+.analysis-panel-heading h2{font-size:20px;margin:0 0 3px;color:#23598a}
+.analysis-panel-heading span{font-size:12px;color:#736658}
+.analysis-panel-heading button{background:#286ca5;color:#fff;border:0;border-radius:8px;padding:12px 16px;font-weight:750;white-space:nowrap}
+.analysis-panel-heading button:disabled{opacity:.5}
+.analysis-decision{margin:16px 0 4px}
+.analysis-note{font-size:12px;color:#746956;line-height:1.5}
+.analysis-options{display:grid;gap:6px;margin:16px 0}
+.analysis-option{display:grid;grid-template-columns:minmax(125px,1fr) 85px 85px auto;gap:12px;align-items:center;border:1px solid #e1d6be;background:#fff;border-radius:8px;padding:9px 12px;font-size:13px}
+.analysis-option--chosen{border:2px solid #d5a030;background:#fff2c9;font-weight:700}
+.analysis-option strong{font-variant-numeric:tabular-nums}
+.analysis-option em{color:#34713b;font-size:11px;font-style:normal}
+.analysis-opponent-hand{display:flex;gap:2px;justify-content:center;max-width:320px}
+.analysis-opponent-hand .playing-card--small{width:39px;height:70px;flex:none}
+.analysis-opponent-hand .playing-card--small .card-art-frame{transform:scale(.53);transform-origin:top left}
+.analysis-opponent-hand .playing-card--small:disabled{opacity:1}
+.opponent:has(.analysis-opponent-hand){max-width:340px;width:max-content}
+.opponent--top:has(.analysis-opponent-hand){top:10px}
+.opponent--left:has(.analysis-opponent-hand){left:8px}
+.opponent--right:has(.analysis-opponent-hand){right:8px}
+.table-area:has(.analysis-opponent-hand) .table-center{inset:190px 250px 172px}
+@media(max-width:920px){
+ .analysis-opponent-hand{max-width:165px;flex-wrap:wrap;gap:2px}
+ .opponent:has(.analysis-opponent-hand){max-width:170px}
+ .table-area:has(.analysis-opponent-hand) .table-center{inset:205px 150px 165px}
+}
+@media(max-width:560px){
+ .analysis-panel-heading{align-items:start;flex-direction:column}
+ .analysis-option{grid-template-columns:1fr auto;gap:6px}
+ .analysis-opponent-hand{max-width:110px;gap:0}
+ .analysis-opponent-hand .playing-card--small{width:27px;height:47px}
+ .analysis-opponent-hand .playing-card--small .card-art-frame{transform:scale(.37)}
+ .opponent:has(.analysis-opponent-hand){max-width:120px}
+ .table-area:has(.analysis-opponent-hand) .table-center{inset:210px 110px 160px}
+}
