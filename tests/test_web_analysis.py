@@ -5,6 +5,7 @@ pytest.importorskip("fastapi")
 pytest.importorskip("httpx")
 
 from fastapi.testclient import TestClient
+
 from schafkopf_ai.web.api import app
 
 client = TestClient(app)

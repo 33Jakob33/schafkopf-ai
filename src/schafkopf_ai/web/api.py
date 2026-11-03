@@ -9,7 +9,14 @@ from pydantic import BaseModel
 
 from schafkopf_ai.game.deck import Deck
 from schafkopf_ai.game.game_type import GameType
-from schafkopf_ai.web.sessions import AGENT_KINDS, advance_one, model_catalog, new_session, play, sessions, set_analysis_mode
+from schafkopf_ai.web.sessions import (
+    advance_one,
+    model_catalog,
+    new_session,
+    play,
+    sessions,
+    set_analysis_mode,
+)
 
 app = FastAPI(title="Schafkopf AI API", version="0.1.0")
 

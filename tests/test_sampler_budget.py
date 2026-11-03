@@ -5,7 +5,6 @@ from pathlib import Path
 from schafkopf_ai.agents.heuristic_agent import HeuristicAgent
 from schafkopf_ai.game.rules import RAMSCH_RULES
 from schafkopf_ai.runner.round_runner import RoundRunner
-from schafkopf_ai.search.hidden_state import HiddenStateSampler
 
 
 def _module():

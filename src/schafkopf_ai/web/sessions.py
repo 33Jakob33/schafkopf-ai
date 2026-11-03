@@ -10,19 +10,20 @@ import secrets
 from dataclasses import dataclass
 from pathlib import Path
 
-from schafkopf_ai.evaluation.paired import EvaluationAgentSpec, load_evaluation_agent
-
 from schafkopf_ai.agents.agent import Agent
 from schafkopf_ai.agents.heuristic_agent import HeuristicAgent
+from schafkopf_ai.agents.heuristic_bidding_random_card_agent import (
+    HeuristicBiddingRandomCardAgent,
+)
 from schafkopf_ai.agents.random_agent import RandomAgent
-from schafkopf_ai.agents.strategic_heuristic_agent import StrategicHeuristicAgent
-from schafkopf_ai.agents.heuristic_bidding_random_card_agent import HeuristicBiddingRandomCardAgent
 from schafkopf_ai.agents.rollout_card_play_agent import RolloutCardPlayAgent
+from schafkopf_ai.agents.strategic_heuristic_agent import StrategicHeuristicAgent
+from schafkopf_ai.evaluation.paired import EvaluationAgentSpec, load_evaluation_agent
 from schafkopf_ai.game.bidding import BiddingAction, BiddingState
 from schafkopf_ai.game.card import Card
 from schafkopf_ai.game.deck import Deck
-from schafkopf_ai.game.game_state import GameState
 from schafkopf_ai.game.game_result import result_from_game_state
+from schafkopf_ai.game.game_state import GameState
 from schafkopf_ai.game.rules import RAMSCH_RULES
 from schafkopf_ai.game.settlement import settlement_from_game_state
 from schafkopf_ai.search.rollout import MonteCarloActionEvaluator
