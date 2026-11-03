@@ -81,3 +81,33 @@ not align.
 The client calls `POST /api/games/{id}/advance` to advance **one AI action**
 at a time. This makes betting announcements and opponent card plays visible.
 The API remains authoritative; the browser cannot inspect hidden hands.
+
+## Reorder the human player's hand
+
+- Drag a card onto another card to move it to that position.
+- Use **Nach Farbe** for Bavarian suits (Eichel, Gras, Herz, Schellen)
+  and **Nach Wert** for descending rank groups.
+- Sorting is purely a browser preference. The API still validates moves
+  against actual card IDs, and hidden hands are never sent to the client.
+- Played cards disappear without resetting your chosen order; a new round
+  starts with the newly dealt order.
+
+## AI model explanations
+
+Every opponent has a custom dropdown. Hover over or keyboard-focus a model
+choice for a short description; the menu also explains missing checkpoints.
+Unlike native HTML select options, this works in a browser-controlled menu.
+A model choice becomes active when you start a **new** round.
+
+## Manual UI check
+
+```powershell
+cd frontend
+npm.cmd run typecheck
+npm.cmd run build
+```
+
+In the browser: drag an unplayable card during bidding, sort by suit, start a
+round, play one legal card, and verify the order of remaining cards is
+preserved. Open each opponent model dropdown, hover a disabled neural agent,
+check the description, then select a baseline agent and start a new round.
