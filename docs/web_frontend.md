@@ -111,3 +111,40 @@ In the browser: drag an unplayable card during bidding, sort by suit, start a
 round, play one legal card, and verify the order of remaining cards is
 preserved. Open each opponent model dropdown, hover a disabled neural agent,
 check the description, then select a baseline agent and start a new round.
+
+## Analysemodus (Schritt für Schritt)
+
+Die Taste **Analysemodus: AN/AUS** oberhalb des Spieltisches schaltet in der
+aktuellen Partie zwischen normalem Spielen und Analyse um. Bei einer neuen
+Runde bleibt der ausgewählte Modus erhalten.
+
+- **Alle vier Hände:** Im Analysemodus werden die echten verbleibenden Karten
+  aller Spieler angezeigt. Außerhalb des Analysemodus werden die verdeckten
+  Hände **nicht** an den Browser gesendet.
+- **Nächster Schritt:** Führt genau eine nächste Ansage oder Kartenaktion aus.
+  Kein automatisches Durchspielen. Auch Sitz 0 wird für die Analyse durch
+  den HeuristicAgent gespielt; im normalen Modus ist Sitz 0 wieder menschlich.
+- **Entscheidungsvorschau:** Vor dem Schritt wird die nächste Modellentscheidung
+  berechnet und zwischengespeichert. Der folgende Schritt spielt exakt diese
+  Karte bzw. Ansage aus (auch bei RandomAgent).
+- **Kartenwerte:** Nur legale Karten werden aufgelistet. RolloutAgent zeigt
+  seine eigenen erwarteten Auszahlungen, Q-Agent seine vorhergesagten
+  Auszahlungen. Bei anderen Modellen wird eine *separate, nur auf der
+  Spieler-Observation beruhende 4-Sample-Rollout-Schätzung* ausgewiesen.
+  Diese Zahlen sind **nicht die internen Werte** der Heuristik, PPO- oder
+  BC-Modelle und auch kein perfektes Spiel mit Kenntnis aller Hände.
+- **Gebote:** Derzeit wird die geplante Ansage gegenüber allen legalen
+  Alternativen markiert; für Bieten gibt es noch keine numerischen Rankings.
+
+Für einen lokalen Funktionstest:
+
+```powershell
+uv run --with fastapi --with httpx pytest tests/test_web_analysis.py tests/test_web_game.py
+cd frontend
+npm.cmd run typecheck
+npm.cmd run build
+```
+
+Anmerkung: Die Analyseentscheidung wird serverseitig aus dem Modellzustand
+berechnet und kann bei Rollout-Modellen etwas dauern. Sessionzustand und
+Vorschaucache sind in-memory, nicht für öffentliche Bereitstellung gedacht.
