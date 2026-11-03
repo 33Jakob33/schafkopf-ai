@@ -8,7 +8,25 @@ export interface Contract {
   called_suit: string | null;
   trump_suit: string | null;
 }
+export interface AnalysisOption {
+  id: string;
+  label: string;
+  selected: boolean;
+  value: number | null;
+  rank: number | null;
+}
+export interface AnalysisPreview {
+  kind: "card" | "bidding" | "transition";
+  player: number | null;
+  chosen?: string;
+  message: string;
+  options: AnalysisOption[];
+}
 export interface GameView {
+  analysis: boolean;
+  analysis_preview: AnalysisPreview | null;
+  all_hands: Card[][] | null;
+  step_index: number;
   id: string;
   phase: "bidding" | "playing" | "finished";
   current_player: number | null;
@@ -50,7 +68,8 @@ async function request<T>(url: string, method = "GET", body?: unknown): Promise<
 }
 export const api = {
   engine: () => request<EngineInfo>("/api/engine"),
-  newGame: (opponents: string[]) => request<GameView>("/api/games", "POST", { opponents }),
+  newGame: (opponents: string[], analysis = false) => request<GameView>("/api/games", "POST", { opponents, analysis }),
+  mode: (id: string, analysis: boolean) => request<GameView>(`/api/games/${encodeURIComponent(id)}/mode`, "POST", { analysis }),
   advance: (id: string) => request<GameView>(`/api/games/${encodeURIComponent(id)}/advance`, "POST"),
   act: (id: string, action: { card?: string; action_id?: string }) =>
     request<GameView>(`/api/games/${encodeURIComponent(id)}/actions`, "POST", action),
