@@ -8,7 +8,6 @@ import argparse
 import csv
 import json
 import math
-import random
 import statistics
 import time
 from collections import defaultdict
@@ -18,8 +17,8 @@ from schafkopf_ai.agents.heuristic_agent import HeuristicAgent
 from schafkopf_ai.evaluation.paired import run_paired_variant
 from schafkopf_ai.game.deck import Deck
 from schafkopf_ai.game.game_state import GameState
-from schafkopf_ai.search.rollout import MonteCarloActionEvaluator
 from schafkopf_ai.search.action_evidence import observed_action_log_likelihood
+from schafkopf_ai.search.rollout import MonteCarloActionEvaluator
 
 METHODS = ("unweighted", "weighted")
 BUDGET_METHODS = ("unweighted_32", "weighted_32", "unweighted_full_pool")

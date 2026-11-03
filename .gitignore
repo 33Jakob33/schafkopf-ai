@@ -23,3 +23,9 @@ htmlcov/
 data/behavior_cloning/
 models/behavior_cloning/
 models/ppo/
+
+# Web frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.tsbuildinfo

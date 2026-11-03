@@ -199,3 +199,13 @@ GitHub Actions runs the project checks. The suite covers core card/game invarian
 - Keep model, encoding, bidding profile and rollout configurations alongside evaluation results.
 - Generated datasets and model checkpoints are ignored by Git and must be produced locally.
 - This is an evolving hobby project, not a production-ready or verified optimal Schafkopf AI.
+
+
+## Experimental web frontend (feature/web-frontend)
+
+A React + TypeScript + Vite interface and optional FastAPI adapter are being
+built on `feature/web-frontend`. The first milestone displays API health and
+real engine metadata; interactive rounds are not implemented yet.
+
+See [web development setup](docs/web_frontend.md) for installation, local
+servers and verification commands.
