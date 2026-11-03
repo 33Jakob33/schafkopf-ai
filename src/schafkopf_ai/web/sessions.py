@@ -25,6 +25,8 @@ from schafkopf_ai.game.game_state import GameState
 from schafkopf_ai.game.game_result import result_from_game_state
 from schafkopf_ai.game.rules import RAMSCH_RULES
 from schafkopf_ai.game.settlement import settlement_from_game_state
+from schafkopf_ai.search.rollout import MonteCarloActionEvaluator
+from schafkopf_ai.training.card_play_encoding import card_to_action_index
 
 # Checkpoints are generated locally, not stored in Git.
 # Paths follow the existing trainer defaults.
@@ -116,6 +118,120 @@ class Session:
     redeals: int = 0
     last_trick: list[dict] | None = None
     announcement: str | None = None
+    analysis: bool = False
+    pending_action: BiddingAction | Card | None = None
+    pending_info: dict | None = None
+    step_index: int = 0
+
+    def preview(self) -> dict | None:
+        """Predict a decision once, then cache that exact action for next step.
+
+        The model only sees its own observation. The omniscient card display
+        is produced separately and must never enter agent inference.
+        """
+        if not self.analysis:
+            return None
+        if self.pending_info is not None:
+            return self.pending_info
+        if self.state is None:
+            if self.bidding.is_complete:
+                return {"kind": "transition", "player": None,
+                        "message": "Bietrunde beenden und Spiel beginnen", "options": []}
+            player = self.bidding.current_player
+            if player is None:
+                return None
+            legal = self.bidding.legal_actions(player)
+            action = self.agents[player].choose_bidding_action(
+                self.bidding.observation_for(player), legal,
+            )
+            if action not in legal:
+                raise RuntimeError("Agent proposed an illegal bid")
+            self.pending_action = action
+            self.pending_info = {
+                "kind": "bidding", "player": player,
+                "chosen": action_label(action),
+                "message": "Modellentscheidung (keine numerischen Gebotswerte)",
+                "options": [
+                    {"id": str(i), "label": action_label(a),
+                     "selected": a == action, "value": None, "rank": None}
+                    for i, a in enumerate(legal)
+                ],
+            }
+            return self.pending_info
+        if self.state.is_complete:
+            return None
+        player = self.state.current_player
+        if player is None:
+            return None
+        legal_cards = self.state.legal_moves(player)
+        observation = self.state.observation_for(player)
+        chosen = self.agents[player].choose_card(observation, legal_cards)
+        if chosen not in legal_cards:
+            raise RuntimeError("Agent proposed an illegal card")
+        self.pending_action = chosen
+        # A separate, public-observation-only 4-sample rollout provides
+        # comparable values even if the active model is a heuristic or neural
+        # policy without exposed action scores.
+        estimates = MonteCarloActionEvaluator(
+            samples_per_action=4, seed=self.seed + self.step_index * 1009 + 77,
+        ).evaluate(observation, legal_cards) if len(legal_cards) > 1 else ()
+        values = {estimate.card: estimate.mean_payment for estimate in estimates}
+        source = "Vergleichsschätzung: 4 Rollouts je Karte (nicht Modell-intern)"
+        agent = self.agents[player]
+        native = getattr(agent, "last_action_values", ())
+        if native:
+            values = {entry.card: entry.mean_payment for entry in native}
+            source = "Rollout-Modell: erwartete Auszahlung"
+        q_values = getattr(agent, "last_q_values", ())
+        if q_values:
+            values = {card: q_values[card_to_action_index(card)]
+                      for card in legal_cards}
+            source = "Q-Modell: geschätzte Auszahlung"
+        sorted_cards = sorted(legal_cards, key=lambda card: values.get(card, float("-inf")), reverse=True)
+        ranks = {card: i + 1 for i, card in enumerate(sorted_cards)}
+        self.pending_info = {
+            "kind": "card", "player": player,
+            "chosen": card_id(chosen), "message": source,
+            "options": [
+                {"id": card_id(card), "label": str(card),
+                 "selected": card == chosen, "value": round(values[card], 2) if card in values else None,
+                 "rank": ranks[card] if card in values else None}
+                for card in legal_cards
+            ],
+        }
+        return self.pending_info
+
+    def analysis_step(self) -> None:
+        if not self.analysis:
+            raise ValueError("Not an analysis session")
+        info = self.preview()
+        if info is None:
+            return
+        if info["kind"] == "transition":
+            # Contract creation is an internal transition, not a new move.
+            self.advance(max_actions=1)
+        elif info["kind"] == "bidding":
+            player = self.bidding.current_player
+            action = self.pending_action
+            if player is None or not isinstance(action, BiddingAction):
+                raise RuntimeError("No cached bid")
+            self.bidding.apply_action(player, action)
+            self.announcement = f"{self.names[player]}: {action_label(action)}"
+            if self.bidding.is_complete:
+                self.advance(max_actions=1)
+        else:
+            if self.state is None:
+                raise RuntimeError("Card play has not started")
+            player = self.state.current_player
+            action = self.pending_action
+            if player is None or not isinstance(action, Card):
+                raise RuntimeError("No cached card")
+            self.state.play_card(player, action)
+            self.announcement = f"{self.names[player]} spielt {action}"
+            self._capture_trick()
+        self.pending_action = None
+        self.pending_info = None
+        self.step_index += 1
 
     def advance(self, max_actions: int = 500) -> None:
         """Run automatic agents only until the next human action/end."""
@@ -180,10 +296,18 @@ class Session:
 
     def view(self, session_id: str) -> dict:
         state = self.state
+        analysis_info = self.preview() if self.analysis else None
+        visible_hands = [
+            [card_json(card) for card in hand]
+            for hand in (self.bidding.hands if state is None else
+                         tuple(player.cards for player in state.players))
+        ] if self.analysis else None
         if state is None:
             legal = self.bidding.legal_actions(HUMAN) if self.bidding.current_player == HUMAN else ()
             return {
-                "id": session_id, "phase": "bidding", "current_player": self.bidding.current_player,
+                "id": session_id, "phase": "bidding",
+                "analysis": self.analysis, "analysis_preview": analysis_info,
+                "all_hands": visible_hands, "step_index": self.step_index, "current_player": self.bidding.current_player,
                 "hand": [card_json(c) for c in self.bidding.hands[HUMAN]],
                 "legal_cards": [], "bidding_actions": [
                     {"id": str(i), "label": action_label(a)}
@@ -214,6 +338,8 @@ class Session:
         )
         return {
             "id": session_id, "phase": "finished" if completed else "playing",
+            "analysis": self.analysis, "analysis_preview": analysis_info,
+            "all_hands": visible_hands, "step_index": self.step_index,
             "current_player": state.current_player,
             "hand": [card_json(c) for c in observation.hand],
             "legal_cards": [card_id(c) for c in legal_cards],
@@ -249,7 +375,7 @@ class Session:
 sessions: dict[str, Session] = {}
 
 
-def new_session(opponents: list[str], seed: int | None = None) -> tuple[str, dict]:
+def new_session(opponents: list[str], seed: int | None = None, analysis: bool = False) -> tuple[str, dict]:
     if len(opponents) != 3 or any(kind not in AGENT_KINDS for kind in opponents):
         raise ValueError("Exactly three supported opponent models required")
     if len(sessions) >= MAX_SESSIONS:
@@ -262,17 +388,20 @@ def new_session(opponents: list[str], seed: int | None = None) -> tuple[str, dic
     agents = (HeuristicAgent(), *(make_agent(kind, chosen_seed + i * 997) for i, kind in enumerate(opponents, 1)))
     session = Session(
         agents=agents, bidding=BiddingState(hands=hands, rules=RAMSCH_RULES),
-        state=None, seed=chosen_seed,
+        state=None, seed=chosen_seed, analysis=analysis,
         names=("Du", *[kind.capitalize() for kind in opponents]),
     )
     session_id = secrets.token_urlsafe(18)
     sessions[session_id] = session
-    session.advance(max_actions=1)
+    if not analysis:
+        session.advance(max_actions=1)
     return session_id, session.view(session_id)
 
 
 def play(session_id: str, action_id: str | None, card: str | None) -> dict:
     session = sessions[session_id]
+    if session.analysis:
+        raise ValueError("Analysis games advance only through the step endpoint")
     if session.state is None:
         if action_id is None or card is not None or session.bidding.current_player != HUMAN:
             raise ValueError("Expected a bidding action")
@@ -301,6 +430,9 @@ def play(session_id: str, action_id: str | None, card: str | None) -> dict:
 
 def advance_one(session_id: str) -> dict:
     session = sessions[session_id]
+    if session.analysis:
+        session.analysis_step()
+        return session.view(session_id)
     if session.state is None and session.bidding.current_player == HUMAN:
         return session.view(session_id)
     if session.state is not None and (session.state.is_complete or session.state.current_player == HUMAN):
