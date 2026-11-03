@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from schafkopf_ai.game.deck import Deck
 from schafkopf_ai.game.game_type import GameType
-from schafkopf_ai.web.sessions import AGENT_KINDS, advance_one, model_catalog, new_session, play, sessions
+from schafkopf_ai.web.sessions import AGENT_KINDS, advance_one, model_catalog, new_session, play, sessions, set_analysis_mode
 
 app = FastAPI(title="Schafkopf AI API", version="0.1.0")
 
@@ -103,3 +103,14 @@ def advance_game(session_id: str) -> dict:
     if session_id not in sessions:
         raise HTTPException(status_code=404, detail="Game not found")
     return advance_one(session_id)
+
+
+class ModeRequest(BaseModel):
+    analysis: bool
+
+
+@app.post("/api/games/{session_id}/mode")
+def change_game_mode(session_id: str, body: ModeRequest) -> dict:
+    if session_id not in sessions:
+        raise HTTPException(status_code=404, detail="Game not found")
+    return set_analysis_mode(session_id, body.analysis)
