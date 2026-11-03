@@ -439,3 +439,12 @@ def advance_one(session_id: str) -> dict:
         return session.view(session_id)
     session.advance(max_actions=1)
     return session.view(session_id)
+
+
+def set_analysis_mode(session_id: str, enabled: bool) -> dict:
+    """Switch display/stepping policy without changing the dealt game."""
+    session = sessions[session_id]
+    session.analysis = enabled
+    session.pending_action = None
+    session.pending_info = None
+    return session.view(session_id)
