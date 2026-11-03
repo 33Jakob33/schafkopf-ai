@@ -97,3 +97,63 @@ footer{margin:20px;text-align:center;color:#8f8270;font-size:12px}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(max-width:850px){.opponent{min-width:120px;max-width:145px}.opponent-model select{font-size:11px;padding:6px 3px}.opponent--left,.opponent--right{min-width:108px;max-width:122px}}
 @media(max-width:480px){.opponent{min-width:92px;max-width:112px}.opponent--left{left:4px}.opponent--right{right:4px}.opponent-model select{font-size:10px;padding:5px 1px}.back-row .card-back{width:18px;height:30px;font-size:10px}.table-center{inset:200px 85px 155px}}
+
+
+/* Hand ordering: sortable by drag/drop or by the two compact sort controls. */
+.human-heading{align-items:center;flex-wrap:wrap}
+.hand-sort-actions{display:inline-flex;gap:5px}
+.hand-sort-actions button{
+  border:1px solid #e0d1b4;border-radius:6px;padding:4px 8px;
+  background:#fffaf0;color:#433622;font-size:11px;font-weight:650;
+}
+.hand-sort-actions button:hover{background:#d6e6f2}
+.hand{align-items:flex-end}
+.hand-card-slot{flex:0 0 auto;position:relative;cursor:grab;transition:transform .15s ease}
+.hand-card-slot:active{cursor:grabbing}
+.hand-card-slot--dragging{opacity:.42;transform:translateY(-12px)}
+.hand-card-slot .playing-card{cursor:inherit}
+.hand-card-slot .playing-card--legal{cursor:pointer}
+
+/* Custom model picker: native <option> elements cannot reliably display
+   interactive hover descriptions across operating systems. */
+.opponent-model{position:relative;width:100%;z-index:10}
+.model-trigger{
+  width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px;
+  background:#fcf6e8;border:1px solid #e1d2a7;border-radius:8px;
+  padding:8px 10px;color:#382b20;font-size:12px;font-weight:650;
+  text-align:left;white-space:nowrap;
+}
+.model-trigger span:first-child{overflow:hidden;text-overflow:ellipsis}
+.model-trigger:hover:not(:disabled),.model-trigger[aria-expanded="true"]{background:#fff;border-color:#5489b2}
+.model-trigger:focus-visible,.model-option:focus-visible,.hand-sort-actions button:focus-visible{
+  outline:3px solid #f2c55d;outline-offset:2px;
+}
+.model-menu{
+  position:absolute;top:calc(100% + 5px);left:50%;transform:translateX(-50%);
+  width:260px;max-width:min(280px,80vw);max-height:260px;overflow-y:auto;
+  background:#fffcf4;color:#322c25;border:1px solid #d9c39d;
+  border-radius:10px;padding:5px;box-shadow:0 10px 25px #0006;
+  text-align:left;z-index:30;overscroll-behavior:contain;
+}
+.model-option-wrap{position:relative;border-radius:7px}
+.model-option{width:100%;border:0;border-radius:6px;padding:8px 9px;background:transparent;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:8px;color:#312a21;text-align:left;font-weight:600;font-size:12px;cursor:pointer}
+.model-option-wrap:hover>.model-option,.model-option:focus-visible{background:#e6eef7}
+.model-option--selected{background:#dcebdc}
+.model-option--missing{color:#82786e}
+.model-lock{font-size:12px}
+.model-tooltip{
+  display:none;margin:0 5px 8px;padding:10px 11px;
+  background:#eef4fc;color:#25384c;border-left:3px solid #4b85bc;
+  border-radius:6px;box-shadow:0 3px 10px #0002;
+  font-size:11px;line-height:1.4;text-align:left;
+}
+.model-tooltip strong{font-size:12px}
+.model-tooltip p{margin:5px 0 0}
+.model-option-wrap:hover>.model-tooltip,.model-option-wrap:focus-within>.model-tooltip{display:block}
+.model-tooltip-warning{color:#99472c;overflow-wrap:anywhere}
+@media(max-width:850px){.model-menu{width:230px}.model-trigger{font-size:11px;padding:7px 5px}}
+@media(max-width:480px){.model-menu{width:225px}.model-trigger{font-size:10px;padding:6px 4px}
+  .human-heading{gap:8px}.hand-sort-actions button{font-size:10px;padding:4px 5px}}
+@media(prefers-reduced-motion:reduce){.hand-card-slot{transition:none}}
