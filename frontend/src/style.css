@@ -160,3 +160,19 @@ footer{margin:20px;text-align:center;color:#8f8270;font-size:12px}
 
 /* Override the table's generic light text for the cream model menu. */
 .opponent .model-trigger span,.opponent .model-option span{color:inherit}
+
+/* Fix: the card's play button must not itself be a drag source. Drag only
+   from the small handle, leaving clicks on legal cards fully functional. */
+.hand-card-slot{position:relative;cursor:default}
+.hand-card-slot .playing-card--legal{cursor:pointer;border:3px solid #ffd447;box-shadow:0 0 0 2px #fff8b3,0 0 13px #ffe47b}
+.hand-card-slot .playing-card--legal:hover{transform:translateY(-12px);border-color:#fff;box-shadow:0 0 0 3px #ffd447,0 6px 20px #0005}
+.card-drag-handle{
+  position:absolute;top:-22px;left:50%;transform:translateX(-50%);
+  width:30px;height:23px;display:flex;align-items:center;justify-content:center;
+  border-radius:7px 7px 0 0;background:#ead8ab;color:#544025;
+  border:1px solid #d3b982;border-bottom:0;cursor:grab;
+  font-size:18px;line-height:1;user-select:none;touch-action:none;
+}
+.card-drag-handle:active{cursor:grabbing}
+.hand-card-slot--dragging{opacity:.5}
+.hand{padding-top:24px}
