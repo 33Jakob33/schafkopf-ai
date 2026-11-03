@@ -52,6 +52,7 @@ function TrickCards({ plays }: { plays: TrickPlay[] }) {
 
 export default function App() {
   const [opponents, setOpponents] = useState(["heuristic", "heuristic", "heuristic"]);
+  const [analysisMode, setAnalysisMode] = useState(false);
   const [game, setGame] = useState<GameView | null>(null);
   const [catalog, setCatalog] = useState<EngineInfo["agent_catalog"]>(FALLBACK_MODELS);
   const [loading, setLoading] = useState(false);
@@ -70,7 +71,7 @@ export default function App() {
     setError(null);
 
     try {
-      const next = await api.newGame(opponents);
+      const next = await api.newGame(opponents, analysisMode);
       setHandOrder([]);
       setDraggedCard(null);
       setRecentTrick(null);
@@ -94,7 +95,7 @@ export default function App() {
   // Advance exactly one AI action at a time: React can animate every card
   // and display every bidding announcement before the next action.
   useEffect(() => {
-    if (!game || loading || game.phase === "finished" || game.current_player === 0) return;
+    if (!game || game.analysis || loading || game.phase === "finished" || game.current_player === 0) return;
     const timer = window.setTimeout(async () => {
       setLoading(true);
       try { setGame(await api.advance(game.id)); }
@@ -114,6 +115,35 @@ export default function App() {
       return () => window.clearTimeout(timer);
     }
   }, [game?.trick_number, game?.phase]);
+
+  async function toggleMode() {
+    if (loading) return;
+    const nextMode = !analysisMode;
+    setLoading(true);
+    setError(null);
+    try {
+      if (game) {
+        const updated = await api.mode(game.id, nextMode);
+        setGame(updated);
+      }
+      setAnalysisMode(nextMode);
+      setRecentTrick(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Moduswechsel fehlgeschlagen");
+    } finally { setLoading(false); }
+  }
+
+  async function nextAnalysisStep() {
+    if (!game || !game.analysis || loading || game.phase === "finished") return;
+    setLoading(true);
+    setError(null);
+    try {
+      setRecentTrick(null);
+      setGame(await api.advance(game.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Analyseschritt fehlgeschlagen");
+    } finally { setLoading(false); }
+  }
 
   const orderedHand = useMemo(() => orderHand(game?.hand ?? [], handOrder), [game?.hand, handOrder]);
 
@@ -142,7 +172,9 @@ export default function App() {
         ))}
       />
       <span>{player ? `${player.points} Augen` : "8 Karten"}</span>
-      <BackCards count={player?.cards ?? 8} />
+      {game?.analysis && game.all_hands ? <div className="analysis-opponent-hand">
+        {game.all_hands[index].map(card => <PlayingCard key={card.id} card={card} small />)}
+      </div> : <BackCards count={player?.cards ?? 8} />}
     </div>;
   }
 
@@ -153,9 +185,13 @@ export default function App() {
     </header>
 
     <section className="settings settings--compact">
+      <button type="button" className={`mode-button ${analysisMode ? "mode-button--active" : ""}`}
+        onClick={() => void toggleMode()} disabled={loading} aria-pressed={analysisMode}>
+        {analysisMode ? "Analysemodus: AN" : "Analysemodus: AUS"}
+      </button>
       <button className="new-game-button" type="button" disabled={loading}
         onClick={() => void start()}>{game ? "Neue Runde" : "Spiel starten"}</button>
-      <span className="hint">Wähle die KI direkt bei jedem Gegner. Änderungen gelten ab der nächsten Runde.</span>
+      <span className="hint">{analysisMode ? "Alle Karten sichtbar · jeden KI-Schritt einzeln prüfen" : "Wähle die KI direkt bei jedem Gegner. Änderungen gelten ab der nächsten Runde."}</span>
     </section>
 
     <section className="table-area">
@@ -199,7 +235,7 @@ export default function App() {
               onDragEnd={() => setDraggedCard(null)}
             >
               <PlayingCard card={card}
-                clickable={!loading && game?.phase === "playing" &&
+                clickable={!analysisMode && !loading && game?.phase === "playing" &&
                   game.current_player === 0 && game.legal_cards.includes(card.id)}
                 onClick={() => void act({ card: card.id })} />
               <span
@@ -222,7 +258,31 @@ export default function App() {
       </div>
     </section>
 
-    {game?.phase === "bidding" && <section className="action-panel">
+    {game?.analysis && game.phase !== "finished" && <section className="analysis-panel">
+      <div className="analysis-panel-heading"><div><h2>Entscheidungsanalyse</h2>
+        <span>Schritt {game.step_index + 1} · {game.analysis_preview?.player === null ? "Spielübergang" : `Spieler ${(game.analysis_preview?.player ?? 0) + 1} (Sitz ${game.analysis_preview?.player ?? 0})`}</span></div>
+        <button disabled={loading} onClick={() => void nextAnalysisStep()}>Nächster Schritt <span aria-hidden="true">›</span></button>
+      </div>
+      {game.analysis_preview ? <>
+        <p className="analysis-decision">Geplante Aktion: <strong>{game.analysis_preview.kind === "card" ?
+          game.analysis_preview.options.find(option => option.selected)?.label :
+          game.analysis_preview.chosen ?? game.analysis_preview.message}</strong></p>
+        <p className="analysis-note">{game.analysis_preview.message}</p>
+        {game.analysis_preview.options.length > 0 && <div className="analysis-options">
+          {[...game.analysis_preview.options].sort((a, b) =>
+            (a.rank ?? 999) - (b.rank ?? 999)).map(option =>
+            <div className={`analysis-option ${option.selected ? "analysis-option--chosen" : ""}`} key={option.id}>
+              <span>{option.label}</span>
+              {option.rank !== null && <span>Rang {option.rank}</span>}
+              {option.value !== null && <strong>{option.value > 0 ? "+" : ""}{option.value.toFixed(2)}</strong>}
+              {option.selected && <em>Wahl der KI</em>}
+            </div>)}
+        </div>}
+      </> : <p>Keine weitere Entscheidung verfügbar.</p>}
+      <p className="analysis-note">Bewertungen sind geschätzte Auszahlungen, keine garantierten Ergebnisse. Die KI erhält weiterhin nur ihre eigene Hand und öffentliche Informationen.</p>
+    </section>}
+
+    {game?.phase === "bidding" && !game.analysis && <section className="action-panel">
       <h2>Deine Ansage</h2>
       <div className="bid-actions">
         {game.bidding_actions.map(action => <button key={action.id} disabled={loading}
@@ -230,7 +290,7 @@ export default function App() {
       </div>
       <p className="hint">{game.bidding_actions.length ? "Du bist an der Reihe." : "Die Gegner bieten …"}</p>
     </section>}
-    {game?.phase === "playing" && <p className="turn-hint">{game.current_player === 0 ? `Du bist dran: ${game.legal_cards.length} spielbare Karte(n) sind markiert.` : "Die Gegner spielen …"}</p>}
+    {game?.phase === "playing" && !game.analysis && <p className="turn-hint">{game.current_player === 0 ? `Du bist dran: ${game.legal_cards.length} spielbare Karte(n) sind markiert.` : "Die Gegner spielen …"}</p>}
     {game?.phase === "finished" && <section className="action-panel">
       <h2>Abrechnung</h2>
       <div className="payments">{game.payments?.map((value, i) =>
